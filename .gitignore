@@ -1,0 +1,11 @@
+/target
+/grind
+/deploy
+
+/test-ledger
+/db_tapestore
+/db_tapestore_read
+
+*/**/db_tapestore
+*/**/db_tapestore_read
+/*.json
