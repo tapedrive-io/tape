@@ -60,7 +60,7 @@ tapedrive archive
 
 ## Mining
 
-You can help secure the tape network by running a miner. You'll be rewarded with the TAPE token.
+You can help secure the tape network by running a miner. You'll be rewarded with the [TAPE](https://explorer.solana.com/address/TAPEv9oFkdiWwq4pMXToy1DnTyki2BW7nLGkKj3iQFu?cluster=devnet) token.
 
 ```
 tapedrive register <name of your miner>
