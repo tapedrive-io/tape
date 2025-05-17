@@ -1,4 +1,4 @@
-.PHONY: clean build validator local test
+.PHONY: clean build validator local test example metadata
 
 clean:
 	@rm -rf test-ledger
