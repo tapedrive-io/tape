@@ -3,7 +3,8 @@
 
 **Your data, permanently recorded** — uncensorable, uneditable, and here for good.
 
-![A29B2E3C-DD15-41D1-B223-D85740194F76](https://github.com/user-attachments/assets/0f6f86b5-c4a1-414e-9263-bfa1ff6a8123)
+![image](https://github.com/user-attachments/assets/bf674eb1-512d-47e7-a9c5-e0d0e44c6edb)
+
 
 TAPEDRIVE makes it easy to read and write data on Solana. It's over 1,400x cheaper than using an account. It works by compressing your data into tiny on-chain proofs. A network of miners then solve challenges in parallel to secure your data. It's entirely on Solana, so there's no need for side-chains or consensus overhead. The network rewards miners with the TAPE token, capped at 7 million (decaying ~15 % per year) and aligns incentives for long-term growth.
 
