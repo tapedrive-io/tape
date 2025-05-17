@@ -39,7 +39,7 @@ tapedrive read <id>
 
 Whether you're writing a message, a file, or something else, tapedrive compresses the data first, then splits it into chunks that are writen to a tape on the blockchain. Each tape stores the name, number of chunks, byte size, data hash, and the tail of the tape.
 
-When you want to retrieve your data, tapedrive reads the tape sequentially from the blockchain to reassemble the original data.
+When you want to retrieve your data, tapedrive reads the tape sequentially from the tape network or blockchain to reassemble the original data.
 
 ## Prerequisites
 - A Solana [keypair](https://solana.com/docs/intro/installation#create-wallet) (default: `~/.config/solana/id.json`, or use `-k <filepath>` to override).
