@@ -6388,7 +6388,7 @@ dependencies = [
 
 [[package]]
 name = "tape-api"
-version = "0.1.0"
+version = "0.1.5"
 dependencies = [
  "array-const-fn-init",
  "brine-tree",
@@ -6405,7 +6405,7 @@ dependencies = [
 
 [[package]]
 name = "tape-client"
-version = "0.1.0"
+version = "0.1.5"
 dependencies = [
  "anyhow",
  "base64 0.13.1",
@@ -6430,7 +6430,7 @@ dependencies = [
 
 [[package]]
 name = "tape-example"
-version = "0.1.0"
+version = "0.1.5"
 dependencies = [
  "bincode",
  "brine-tree",
@@ -6453,7 +6453,7 @@ dependencies = [
 
 [[package]]
 name = "tape-network"
-version = "0.1.0"
+version = "0.1.5"
 dependencies = [
  "anyhow",
  "axum",
@@ -6485,7 +6485,7 @@ dependencies = [
 
 [[package]]
 name = "tape-program"
-version = "0.1.0"
+version = "0.1.5"
 dependencies = [
  "bincode",
  "brine-tree",
@@ -6508,7 +6508,7 @@ dependencies = [
 
 [[package]]
 name = "tapedrive-cli"
-version = "0.1.0"
+version = "0.1.5"
 dependencies = [
  "anyhow",
  "chrono",
