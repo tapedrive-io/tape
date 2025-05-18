@@ -23,12 +23,13 @@ pub async fn handle_write_command(cli: Cli, client: RpcClient, payer: Keypair) -
             assume_yes,
             tape_name,
             no_verify,
+            raw,
         } => {
             // Process input data
             let (data, source_desc) = process_input(filename, message, remote).await?;
 
             // Prepare data (compress, hash, chunk)
-            let (chunks, _hash) = tapedrive::prepare_data(&data)?;
+            let (chunks, _hash) = tapedrive::prepare_data(&data, raw)?;
             let total_segments = chunks.len();
 
             // Set tape name, defaulting to timestamp

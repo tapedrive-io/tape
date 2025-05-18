@@ -1,10 +1,16 @@
-use std::str::FromStr;
+use std::{net::SocketAddr, str::FromStr};
 use std::sync::Arc;
 
-use axum::{extract::State, http::StatusCode, response::IntoResponse, routing::post, Json, Router};
+use axum::{
+    extract::State,
+    http::StatusCode,
+    response::IntoResponse,
+    routing::post,
+    Json,
+    Router,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::pubkey::Pubkey;
 
 use super::store::{StoreError, TapeStore};
@@ -268,14 +274,30 @@ async fn rpc_handler(
 
 pub async fn web_loop(
     store: TapeStore,
-    _client: &RpcClient,
+    port: u16,
 ) -> anyhow::Result<()> {
     let store = Arc::new(store);
+
+    // Refresh the store every 15 seconds
+    {
+        let store = Arc::clone(&store);
+        tokio::spawn(async move {
+            let interval = std::time::Duration::from_secs(15);
+            loop {
+                store.catch_up_with_primary().unwrap();
+                tokio::time::sleep(interval).await;
+            }
+        });
+    }
+
     let app = Router::new()
         .route("/api", post(rpc_handler))
         .with_state(store);
 
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await?;
+    let addr = SocketAddr::from(([127, 0, 0, 1], port));
+    let listener = tokio::net::TcpListener::bind(&addr).await?;
+
     axum::serve(listener, app).await?;
+
     Ok(())
 }

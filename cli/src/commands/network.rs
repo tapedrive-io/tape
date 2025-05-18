@@ -30,7 +30,7 @@ pub async fn handle_network_commands(cli: Cli, client: RpcClient, payer: Keypair
             log::print_message(format!("Listening on port {}", port).as_str());
 
             let secondary_store = tape_network::store::secondary()?;
-            web_loop(secondary_store, &client).await?;
+            web_loop(secondary_store, port).await?;
         }
 
         Commands::Archive { starting_slot, trusted_peer } => {

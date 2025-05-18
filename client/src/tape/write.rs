@@ -91,16 +91,27 @@ pub async fn finalize_tape(
 }
 
 /// Prepares data for writing (compresses and hashes it), returning the chunks and hash.
-pub fn prepare_data(data: &[u8]) -> Result<(Vec<Vec<u8>>, [u8; 32])> {
-    let compressed_data = compress(data)?;
+pub fn prepare_data(data: &[u8], use_compression: bool) -> Result<(Vec<Vec<u8>>, [u8; 32])> {
+    let data = if use_compression {
+        compress(data)?
+    } else {
+        data.to_vec()
+    };
+
     let mut hasher = Keccak256::new();
-    hasher.update(&compressed_data);
+    hasher.update(&data);
     let hash = hasher.finalize();
 
     let mut full_data = Vec::new();
-    full_data.push(TapeLayout::Compressed.into());
+
+    if use_compression {
+        full_data.push(TapeLayout::Compressed.into());
+    } else {
+        full_data.push(TapeLayout::Raw.into());
+    }
+
     full_data.extend_from_slice(&hash);
-    full_data.extend_from_slice(&compressed_data);
+    full_data.extend_from_slice(&data);
 
     let safe_size = SEGMENT_SIZE.min(128*7);
 

@@ -55,6 +55,9 @@ pub enum Commands {
 
         #[arg(long = "no-verify", help = "Skip verification of the tape")]
         no_verify: bool,
+
+        #[arg(long = "raw", help = "Write raw data without compression", default_value_t = false)]
+        raw: bool,
     },
     Read {
         #[arg(help = "Tape account to read")]
