@@ -40,7 +40,7 @@ struct RpcRequest {
 }
 
 #[derive(Serialize)]
-struct RpcError {
+pub struct RpcError {
     code: i64,
     message: String,
 }
@@ -74,11 +74,14 @@ fn make_response(
 }
 
 /// Retrieve the last‐persisted block height & drift.
-/// Example:
-/// curl -X POST http://127.0.0.1:3000/api \\
-///      -H 'Content-Type: application/json' \\
+///
+/// Example invocation:
+/// ```bash
+/// curl -X POST http://127.0.0.1:3000/api \
+///      -H 'Content-Type: application/json' \
 ///      -d '{"jsonrpc":"2.0","id":5,"method":"getHealth","params":{}}'
-fn rpc_get_health(store: &TapeStore, _params: &Value) -> Result<Value, RpcError> {
+/// ```
+pub fn rpc_get_health(store: &TapeStore, _params: &Value) -> Result<Value, RpcError> {
     let (last_processed_slot, drift) = store
         .get_health()
         .map_err(|e| RpcError {
@@ -89,16 +92,19 @@ fn rpc_get_health(store: &TapeStore, _params: &Value) -> Result<Value, RpcError>
 }
 
 /// Retrieve the pubkey (tape address) associated with a tape number.
+///
 /// Parameters:
 /// - `tape_number`: The numeric ID of the tape.
+///
 /// Returns the base-58-encoded Solana pubkey.
+///
 /// Example invocation:
 /// ```bash
 /// curl -X POST http://127.0.0.1:3000/api \
 ///      -H 'Content-Type: application/json' \
 ///      -d '{"jsonrpc":"2.0","id":1,"method":"getTapeAddress","params":{"tape_number":42}}'
 /// ```
-fn rpc_get_tape_address(store: &TapeStore, params: &Value) -> Result<Value, RpcError> {
+pub fn rpc_get_tape_address(store: &TapeStore, params: &Value) -> Result<Value, RpcError> {
     let tn = params
         .get("tape_number")
         .and_then(Value::as_u64)
@@ -123,16 +129,19 @@ fn rpc_get_tape_address(store: &TapeStore, params: &Value) -> Result<Value, RpcE
 }
 
 /// Look up the numeric tape ID for a given pubkey (tape address).
+///
 /// Parameters:
 /// - `tape_address`: Base-58-encoded Solana pubkey.
+///
 /// Returns the `u64` tape number.
+///
 /// Example invocation:
 /// ```bash
 /// curl -X POST http://127.0.0.1:3000/api \
 ///      -H 'Content-Type: application/json' \
 ///      -d '{"jsonrpc":"2.0","id":2,"method":"getTapeNumber","params":{"tape_address":"<PUBKEY>"}}'
 /// ```
-fn rpc_get_tape_number(store: &TapeStore, params: &Value) -> Result<Value, RpcError> {
+pub fn rpc_get_tape_number(store: &TapeStore, params: &Value) -> Result<Value, RpcError> {
     let addr = params
         .get("tape_address")
         .and_then(Value::as_str)
@@ -162,17 +171,20 @@ fn rpc_get_tape_number(store: &TapeStore, params: &Value) -> Result<Value, RpcEr
 }
 
 /// Fetch a single segment’s data by tape address and segment number.
+///
 /// Parameters:
 /// - `tape_address`: Base-58 pubkey identifying the tape.
 /// - `segment_number`: Zero-based segment index.
+///
 /// Returns a Base64-encoded string of the raw bytes.
+///
 /// Example invocation:
 /// ```bash
 /// curl -X POST http://127.0.0.1:3000/api \
 ///      -H 'Content-Type: application/json' \
 ///      -d '{"jsonrpc":"2.0","id":3,"method":"getSegment","params":{"tape_address":"<PUBKEY>","segment_number":3}}'
 /// ```
-fn rpc_get_segment(store: &TapeStore, params: &Value) -> Result<Value, RpcError> {
+pub fn rpc_get_segment(store: &TapeStore, params: &Value) -> Result<Value, RpcError> {
     let addr = params
         .get("tape_address")
         .and_then(Value::as_str)
@@ -210,16 +222,20 @@ fn rpc_get_segment(store: &TapeStore, params: &Value) -> Result<Value, RpcError>
 }
 
 /// Retrieve all segments and their data for a given tape address.
+///
 /// Parameters:
 /// - `tape_address`: Base-58 pubkey identifying the tape.
+///
 /// Returns a JSON array of objects `[{ segment_number, data }]`, where `data` is Base64.
+///
 /// Example invocation:
+///
 /// ```bash
 /// curl -X POST http://127.0.0.1:3000/api \
 ///      -H 'Content-Type: application/json' \
 ///      -d '{"jsonrpc":"2.0","id":4,"method":"getTape","params":{"tape_address":"<PUBKEY>"}}'
 /// ```
-fn rpc_get_tape(store: &TapeStore, params: &Value) -> Result<Value, RpcError> {
+pub fn rpc_get_tape(store: &TapeStore, params: &Value) -> Result<Value, RpcError> {
     let addr = params
         .get("tape_address")
         .and_then(Value::as_str)

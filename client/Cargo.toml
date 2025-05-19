@@ -5,10 +5,11 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 homepage.workspace = true
-documentation.workspace = true
 repository.workspace = true
 readme.workspace = true
 keywords.workspace = true
+
+documentation = "https://docs.rs/tape-client"
 
 [dependencies]
 tape-api.workspace = true

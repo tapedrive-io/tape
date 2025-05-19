@@ -1,4 +1,4 @@
-.PHONY: clean build validator local test example metadata
+.PHONY: clean build validator local test example metadata docs
 
 clean:
 	@rm -rf test-ledger
@@ -15,6 +15,9 @@ test: metadata
 
 example: build
 	@cd example && cargo test-sbf
+
+docs:
+	cargo doc --workspace --no-deps --open
 
 validator:
 	solana-test-validator \

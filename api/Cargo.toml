@@ -5,9 +5,10 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 homepage.workspace = true
-documentation.workspace = true
 repository.workspace = true
 keywords.workspace = true
+
+documentation = "https://docs.rs/tape-api"
 
 [dependencies]
 steel.workspace = true

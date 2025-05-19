@@ -8,8 +8,7 @@ edition = "2021"
 license = "Apache-2.0"
 homepage = "https://tapedrive.io"
 description = "Your data, permanently recorded — uncensorable, uneditable, and here for good."
-documentation = "https://docs.rs/tape-api/latest/tape_api/"
-repository = "https://github.com/tapedrive-io/program"
+repository = "https://github.com/tapedrive-io/tape"
 readme = "./README.md"
 keywords = ["solana", "crypto", "mining"]
 
@@ -66,8 +65,6 @@ console = "0.15"
 
 # network-specific
 futures = "0.3"
-
-# miner-specific
 rocksdb = "0.23.0"
 
 [patch.crates-io]
