@@ -1,5 +1,5 @@
 [package]
-name = "tapedrive"
+name = "tapedrive-cli"
 description.workspace = true
 version.workspace = true
 edition.workspace = true
@@ -9,7 +9,7 @@ repository.workspace = true
 readme.workspace = true
 keywords.workspace = true
 
-documentation = "https://docs.rs/tape-cli"
+documentation = "https://docs.rs/tapedrive-cli"
 
 [[bin]]
 name = "tapedrive"
