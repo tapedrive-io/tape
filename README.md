@@ -9,7 +9,7 @@
 TAPEDRIVE makes it easy to read and write data on Solana. It's over 1,400x cheaper than using an account. It works by compressing your data into tiny on-chain proofs. A network of miners then solve challenges in parallel to secure your data. It's entirely on Solana, so there's no need for side-chains or consensus overhead. The network rewards miners with the TAPE token, capped at 7 million (decaying ~15 % per year) and aligns incentives for long-term growth.
 
 
-> [!NOTE]
+> [!Important]
 > The program is deployed on the Solana `devnet`, but **not** on `mainnet` yet. An audit is needed before we roll it out. Stay tuned for updates!
 
 ## Quick Start
@@ -48,6 +48,8 @@ When you want to retrieve your data, tapedrive reads the tape sequentially from 
 Beyond reading and writing, users can participate in the tape network. There are 3 primary functions, all can run on the same machine. 
 
 <img width="958" alt="image" src="https://github.com/user-attachments/assets/edd81c05-9a23-4d04-9433-602053ed12d5" />
+
+> We have an easy install script for running a node, learn more [here](https://github.com/tapedrive-io/deploy).
 
 
 ## Archiving
