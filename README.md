@@ -100,8 +100,8 @@ Retrieves the last persisted block height and drift.
 
 **Example**:
 ```bash
-curl -X POST http://127.0.0.1:3000/api \\
-  -H 'Content-Type: application/json' \\
+curl -X POST http://127.0.0.1:3000/api \
+  -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":5,"method":"getHealth","params":{}}'
 ```
 
@@ -131,8 +131,8 @@ Retrieves the Solana pubkey (tape address) for a given tape number.
 
 **Example**:
 ```bash
-curl -X POST http://127.0.0.1:3000/api \\
-  -H 'Content-Type: application/json' \\
+curl -X POST http://127.0.0.1:3000/api \
+  -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":1,"method":"getTapeAddress","params":{"tape_number":42}}'
 ```
 
@@ -159,8 +159,8 @@ Retrieves the numeric tape ID for a given Solana pubkey (tape address).
 
 **Example**:
 ```bash
-curl -X POST http://127.0.0.1:3000/api \\
-  -H 'Content-Type: application/json' \\
+curl -X POST http://127.0.0.1:3000/api \
+  -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":2,"method":"getTapeNumber","params":{"tape_address":"5P6XDRskXsUxyNUk3kA6oU61kWkLxgMX7W5mTvZ3hYRS"}}'
 ```
 
@@ -188,8 +188,8 @@ Fetches a single segment’s data by tape address and segment number.
 
 **Example**:
 ```bash
-curl -X POST http://127.0.0.1:3000/api \\
-  -H 'Content-Type: application/json' \\
+curl -X POST http://127.0.0.1:3000/api \
+  -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":3,"method":"getSegment","params":{"tape_address":"5P6XDRskXsUxyNUk3kA6oU61kWkLxgMX7W5mTvZ3hYRS","segment_number":3}}'
 ```
 
@@ -224,8 +224,8 @@ Retrieves all segments and their data for a given tape address.
 
 **Example**:
 ```bash
-curl -X POST http://127.0.0.1:3000/api \\
-  -H 'Content-Type: application/json' \\
+curl -X POST http://127.0.0.1:3000/api \
+  -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":4,"method":"getTape","params":{"tape_address":"5P6XDRskXsUxyNUk3kA6oU61kWkLxgMX7W5mTvZ3hYRS"}}'
 ```
 
