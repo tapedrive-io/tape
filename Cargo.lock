@@ -6259,8 +6259,9 @@ checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 
 [[package]]
 name = "steel"
-version = "4.0.1"
-source = "git+https://github.com/regolith-labs/steel?rev=3f6b36b#3f6b36b2e7c0697a8e82e2c05adc20e92f5d530a"
+version = "4.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "21be30219d8df5a7c09a52a8a25ec5a681476f849db44e053cfd288a3d412281"
 dependencies = [
  "bytemuck",
  "fixed",

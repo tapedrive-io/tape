@@ -1,6 +1,6 @@
 [workspace]
-# All crates share the same version
 independent = false
+exclude = ["example"]
 
 [release]
 # Publish to crates.io
