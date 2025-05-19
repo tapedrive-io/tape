@@ -77,8 +77,11 @@ pub enum Commands {
         trusted_peer: Option<String>,
     },
     Mine {
-        #[arg(help = "Miner account public key")]
-        pubkey: String,
+        #[arg(help = "Miner account public key", conflicts_with = "name")]
+        pubkey: Option<String>,
+
+        #[arg(help = "Name of the miner you're mining with", conflicts_with = "pubkey", short = 'n', long = "name")]
+        name: Option<String>,
     },
     Register {
         #[arg(help = "The name of the miner you're registering")]

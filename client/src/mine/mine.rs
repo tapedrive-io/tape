@@ -46,7 +46,7 @@ pub async fn perform_mining(
 
     let signature_bytes = send_and_confirm_transaction(client, &tx)
         .await
-        .map_err(|e| anyhow!("Failed to register miner: {}", e))?;
+        .map_err(|e| anyhow!("Failed to mine: {}", e))?;
 
     let signature: Signature = deserialize(&signature_bytes)?;
 
