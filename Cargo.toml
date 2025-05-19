@@ -13,10 +13,10 @@ readme = "./README.md"
 keywords = ["solana", "crypto", "mining"]
 
 [workspace.dependencies]
-tape-api = { version = "0.1.5", path = "../api" }
-tape-client = { version = "0.1.5", path = "../client" }
-tape-network = { version = "0.1.5", path = "../network" }
-tape-program = { version = "0.1.5", path = "../program" }
+tape-api = { version = "0.1.5", path = "./api" }
+tape-client = { version = "0.1.5", path = "./client" }
+tape-network = { version = "0.1.5", path = "./network" }
+tape-program = { version = "0.1.5", path = "./program" }
 
 # program dependencies
 bytemuck = "1.14.3"
