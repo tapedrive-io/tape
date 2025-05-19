@@ -1,5 +1,5 @@
 [package]
-name = "tapedrive-cli"
+name = "tapedrive"
 description.workspace = true
 version.workspace = true
 edition.workspace = true

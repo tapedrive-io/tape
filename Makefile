@@ -1,4 +1,4 @@
-.PHONY: clean build validator local test example metadata docs
+.PHONY: clean build validator local test example metadata docs release
 
 clean:
 	@rm -rf test-ledger
@@ -18,6 +18,12 @@ example: build
 
 docs:
 	cargo doc --workspace --no-deps --open
+
+release:
+ifndef VERSION
+	$(error VERSION is not set. Usage: make release VERSION=0.1.6)
+endif
+	cargo release $(VERSION) --workspace --execute
 
 validator:
 	solana-test-validator \

@@ -9,3 +9,6 @@
 */**/db_tapestore
 */**/db_tapestore_read
 /*.json
+
+.DS_Store
+*/**/.DS_Store

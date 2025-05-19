@@ -1,6 +1,5 @@
 [workspace]
 independent = false
-exclude = ["tape-example", "tape-program"]
 
 [release]
 publish = true

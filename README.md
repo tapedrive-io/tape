@@ -1,5 +1,5 @@
 # TAPEDRIVE
-[![crates.io](https://img.shields.io/crates/v/tape-api.svg?style=flat)](https://crates.io/crates/tape-api)
+[![crates.io](https://img.shields.io/crates/v/tapedrive-cli.svg?style=flat)](https://crates.io/crates/tapedrive-cli)
 
 **Your data, permanently recorded** — uncensorable, uneditable, and here for good.
 
