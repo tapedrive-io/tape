@@ -3,16 +3,10 @@ independent = false
 exclude = ["example"]
 
 [release]
-# Publish to crates.io
 publish = true
-
-# Tag the release commit
+publish-order = "depth"
 tag = true
-
-# Push commits and tags to remote
 push = true
-
-# Run `cargo test` before publishing
 verify = true
 
 # Make sure version in Cargo.toml is updated everywhere
