@@ -9,7 +9,7 @@
 TAPEDRIVE makes it easy to read and write data on Solana. It's over 1,400x cheaper than using an account. It works by compressing your data into tiny on-chain proofs. A network of miners then solve challenges in parallel to secure your data. It's entirely on Solana, so there's no need for side-chains or consensus overhead. The network rewards miners with the TAPE token, capped at 7 million (decaying ~15 % per year) and aligns incentives for long-term growth.
 
 
-> [!NOTE]
+> [!Important]
 > The program is deployed on the Solana `devnet`, but **not** on `mainnet` yet. An audit is needed before we roll it out. Stay tuned for updates!
 
 ## Quick Start
@@ -48,6 +48,8 @@ When you want to retrieve your data, tapedrive reads the tape sequentially from 
 Beyond reading and writing, users can participate in the tape network. There are 3 primary functions, all can run on the same machine. 
 
 <img width="958" alt="image" src="https://github.com/user-attachments/assets/edd81c05-9a23-4d04-9433-602053ed12d5" />
+
+> We have an easy install script for running a node, learn more [here](https://github.com/tapedrive-io/deploy).
 
 
 ## Archiving
@@ -98,8 +100,8 @@ Retrieves the last persisted block height and drift.
 
 **Example**:
 ```bash
-curl -X POST http://127.0.0.1:3000/api \\
-  -H 'Content-Type: application/json' \\
+curl -X POST http://127.0.0.1:3000/api \
+  -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":5,"method":"getHealth","params":{}}'
 ```
 
@@ -129,8 +131,8 @@ Retrieves the Solana pubkey (tape address) for a given tape number.
 
 **Example**:
 ```bash
-curl -X POST http://127.0.0.1:3000/api \\
-  -H 'Content-Type: application/json' \\
+curl -X POST http://127.0.0.1:3000/api \
+  -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":1,"method":"getTapeAddress","params":{"tape_number":42}}'
 ```
 
@@ -157,8 +159,8 @@ Retrieves the numeric tape ID for a given Solana pubkey (tape address).
 
 **Example**:
 ```bash
-curl -X POST http://127.0.0.1:3000/api \\
-  -H 'Content-Type: application/json' \\
+curl -X POST http://127.0.0.1:3000/api \
+  -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":2,"method":"getTapeNumber","params":{"tape_address":"5P6XDRskXsUxyNUk3kA6oU61kWkLxgMX7W5mTvZ3hYRS"}}'
 ```
 
@@ -186,8 +188,8 @@ Fetches a single segment’s data by tape address and segment number.
 
 **Example**:
 ```bash
-curl -X POST http://127.0.0.1:3000/api \\
-  -H 'Content-Type: application/json' \\
+curl -X POST http://127.0.0.1:3000/api \
+  -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":3,"method":"getSegment","params":{"tape_address":"5P6XDRskXsUxyNUk3kA6oU61kWkLxgMX7W5mTvZ3hYRS","segment_number":3}}'
 ```
 
@@ -222,8 +224,8 @@ Retrieves all segments and their data for a given tape address.
 
 **Example**:
 ```bash
-curl -X POST http://127.0.0.1:3000/api \\
-  -H 'Content-Type: application/json' \\
+curl -X POST http://127.0.0.1:3000/api \
+  -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":4,"method":"getTape","params":{"tape_address":"5P6XDRskXsUxyNUk3kA6oU61kWkLxgMX7W5mTvZ3hYRS"}}'
 ```
 
