@@ -30,3 +30,13 @@ pub fn get_keypair_path(keypair_path: Option<PathBuf>) -> PathBuf {
             .join(".config/solana/id.json")
     })
 }
+
+pub fn get_payer(keypair_path: PathBuf) -> Result<Keypair> {
+    let payer = match load_keypair(&keypair_path) {
+        Ok(payer) => payer,
+        Err(_) => {
+            create_keypair(&keypair_path)?
+        }
+    };
+    Ok(payer)
+}
