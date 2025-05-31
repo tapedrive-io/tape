@@ -21,13 +21,8 @@ pub const METADATA_URI: &str               = "https://tapedrive.io/metadata.json
 pub const TREE_HEIGHT: usize               = 18;
 pub const PROOF_LEN: usize                 = TREE_HEIGHT;
 
-pub const MAGIC_NUMBER: usize              = 8;   // Chunks per segment (1 chunk is used for each recall proof)
-pub const CHUNK_SIZE: usize                = 128; // Bytes per chunk (chosen to fit recall proofs
-                                                  // comfortably in a single Solana transaction)
-
-pub const SEGMENT_SIZE: usize              = CHUNK_SIZE * MAGIC_NUMBER;                      // 1024 bytes 
-pub const MAX_TAPE_SEGMENTS: usize         = 2_usize.pow(TREE_HEIGHT as u32) / MAGIC_NUMBER; // 32,768
-pub const MAX_TAPE_SIZE: usize             = 2_usize.pow(TREE_HEIGHT as u32) * CHUNK_SIZE;   // 32MB
+pub const SEGMENT_SIZE: usize              = 128; // Bytes (chosen to fit recall proofs comfortably)
+pub const MAX_TAPE_SIZE: usize             = 2_usize.pow(TREE_HEIGHT as u32) * SEGMENT_SIZE; // 32MB
 
 pub const SPOOL_COUNT: usize               = 8;
 pub const MAX_NAME_LEN: usize              = 32;

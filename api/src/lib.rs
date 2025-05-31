@@ -5,7 +5,6 @@ pub mod sdk;
 pub mod state;
 pub mod pda;
 pub mod utils;
-pub mod types;
 pub mod loaders;
 pub mod event;
 mod macros;
@@ -20,7 +19,6 @@ pub mod prelude {
     pub use crate::state::*;
     pub use crate::pda::*;
     pub use crate::utils::*;
-    pub use crate::types::*;
     pub use crate::event::*;
     pub use crate::loaders::*;
 }

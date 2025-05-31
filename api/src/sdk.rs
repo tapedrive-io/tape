@@ -4,6 +4,7 @@ use crankx::Solution;
 use crate::{
     consts::*, 
     instruction::*, 
+    state::*,
     pda::*,
     utils,
 };
@@ -11,8 +12,11 @@ use crate::{
 pub fn build_create_ix(
     signer: Pubkey,
     name: &str,
+    layout: TapeLayout
 ) -> Instruction {
     let name = utils::to_name(name);
+    let layout: [u8; 4] = u32::from(layout).to_le_bytes();
+
     let (tape_address, _tape_bump) = tape_pda(signer, &name);
     let (writer_address, _writer_bump) = writer_pda(tape_address);
 
@@ -28,6 +32,7 @@ pub fn build_create_ix(
         ],
         data: Create {
             name,
+            layout,
         }.to_bytes(),
     }
 }
@@ -36,14 +41,8 @@ pub fn build_write_ix(
     signer: Pubkey,
     tape: Pubkey,
     writer: Pubkey,
-    prev_segment: Option<[u8; 64]>,
     data: &[u8],
 ) -> Instruction {
-
-    let prev_segment = match prev_segment {
-        Some(sig) => sig,
-        None => [0; 64],
-    };
 
     Instruction {
         program_id: crate::ID,
@@ -52,9 +51,7 @@ pub fn build_write_ix(
             AccountMeta::new(tape, false),
             AccountMeta::new(writer, false),
         ],
-        data: Write::new(
-            prev_segment
-        ).pack(data),
+        data: Write::new().pack(data),
     }
 }
 
@@ -62,7 +59,7 @@ pub fn build_finalize_ix(
     signer: Pubkey, 
     tape: Pubkey,
     writer: Pubkey,
-    tail_segment: [u8; 64],
+    opaque_data: [u8; 64],
 ) -> Instruction {
 
     Instruction {
@@ -76,7 +73,7 @@ pub fn build_finalize_ix(
             AccountMeta::new_readonly(sysvar::rent::ID, false),
         ],
         data: Finalize {
-            tail: tail_segment,
+            opaque_data,
         }.to_bytes(),
     }
 }
@@ -110,7 +107,7 @@ pub fn build_mine_ix(
     spool: Pubkey,
     tape: Pubkey,
     solution: Solution,
-    recall_chunk: [u8; CHUNK_SIZE],
+    recall_segment: [u8; SEGMENT_SIZE],
     recall_proof: [[u8;32]; PROOF_LEN],
 ) -> Instruction {
     Instruction {
@@ -127,7 +124,7 @@ pub fn build_mine_ix(
         data: Mine {
             digest: solution.d,
             nonce: solution.n,
-            recall_chunk,
+            recall_segment,
             recall_proof,
         }.to_bytes(),
     }

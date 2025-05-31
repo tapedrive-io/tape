@@ -1,7 +1,6 @@
 use steel::*;
 use crate::consts::*;
 use crate::error::*;
-use crate::types::*;
 use brine_tree::{MerkleTree, Leaf};
 
 /// Helper: check a condition is true and return an error if not
@@ -15,11 +14,11 @@ where
     Ok(())
 }
 
-/// Helper: convert a slice to a fixed-size array padded with zeros
+/// Helper: convert a slice to a fixed-size array, truncating or padding with zeros as needed
 pub fn padded_array<const N: usize>(input: &[u8]) -> [u8; N] {
-    assert!(input.len() <= N, "input too long");
     let mut out = [0u8; N];
-    out[..input.len()].copy_from_slice(input);
+    let len = input.len().min(N);
+    out[..len].copy_from_slice(&input[..len]);
     out
 }
 
@@ -36,44 +35,36 @@ pub fn from_name(val: &[u8; MAX_NAME_LEN]) -> String {
     String::from_utf8(name_bytes).unwrap()
 }
 
-/// Helper: compute a leaf from a segment id, chunk id, and chunk
+/// Helper: compute a leaf from a segment id and segment data
 #[inline(always)]
 pub fn compute_leaf(
     segment_id: u64, 
-    chunk_id: u64, 
-    chunk: &Chunk
+    segment: &[u8; SEGMENT_SIZE],
 ) -> Leaf {
     let segment_id = segment_id.to_le_bytes();
-    let chunk_id = chunk_id.to_le_bytes();
 
     Leaf::new(&[
         segment_id.as_ref(), // u64 (8 bytes)
-        chunk_id.as_ref(),   // u64 (8 bytes)
-        chunk.as_bytes(),
+        segment,
     ])
-
 }
 
 /// Helper: write chunks to the Merkle tree
 #[inline(always)]
-pub fn write_chunks(
+pub fn write_segment(
     tree: &mut MerkleTree<{TREE_HEIGHT}>,
     segment_id: u64,
-    segment: &Segment,
+    segment: &[u8; SEGMENT_SIZE],
 ) -> ProgramResult {
-    let chunks = segment.chunks();
-    for (chunk_id, chunk) in chunks.enumerate() {
 
-        let leaf = compute_leaf(
-            segment_id, 
-            chunk_id as u64, 
-            &chunk);
+    let leaf = compute_leaf(
+        segment_id, 
+        &segment);
 
-        check_condition(
-            tree.try_add_leaf(leaf).is_ok(),
-            TapeError::WriteFailed,
-        )?;
-    }
+    check_condition(
+        tree.try_add_leaf(leaf).is_ok(),
+        TapeError::WriteFailed,
+    )?;
 
     Ok(())
 }
@@ -107,12 +98,4 @@ pub fn compute_recall_segment(
     }
 
     u64::from_le_bytes(challenge[8..16].try_into().unwrap()) % total_segments
-}
-
-// Helper: compute the recall chunk number from a given challenge
-#[inline(always)]
-pub fn compute_recall_chunk(
-    challenge: &[u8; 32],
-) -> u64 {
-    u64::from_le_bytes(challenge[16..24].try_into().unwrap()) % MAGIC_NUMBER as u64
 }

@@ -14,7 +14,7 @@ use solana_sdk::{
 use tape_api::prelude::*;
 use litesvm::LiteSVM;
 
-use brine_tree::{MerkleTree, Leaf};
+use brine_tree::MerkleTree;
 use crankx::equix::SolverMemory;
 use crankx::{
     solve_with_memory,
@@ -77,7 +77,7 @@ fn run_integration() {
 
     // Compute challenge solution
     let stored_tape = &tape_db[(miner.recall_tape - 1) as usize];
-    let (solution, recall_chunk, merkle_proof) = 
+    let (solution, recall_segment, merkle_proof) = 
         compute_challenge_solution(stored_tape, &miner, epoch.difficulty);
 
     // Perform mining
@@ -87,7 +87,7 @@ fn run_integration() {
         miner_address,
         stored_tape.pubkey,
         solution,
-        recall_chunk,
+        recall_segment,
         merkle_proof,
     );
 
@@ -193,7 +193,7 @@ fn create_and_verify_tape(
 
     // Create tape
     let blockhash = svm.latest_blockhash();
-    let ix = build_create_ix(payer_pk, &tape_name);
+    let ix = build_create_ix(payer_pk, &tape_name, TapeLayout::Raw);
     let tx = Transaction::new_signed_with_payer(&[ix], Some(&payer_pk), &[&payer], blockhash);
     let res = send_tx(svm, tx);
     assert!(res.is_ok());
@@ -203,10 +203,11 @@ fn create_and_verify_tape(
     let tape = Tape::unpack(&account.data).unwrap();
     assert_eq!(tape.authority, payer_pk);
     assert_eq!(tape.name, to_name(&tape_name));
-    assert_eq!(tape.state, u64::from(TapeState::Created));
+    assert_eq!(tape.layout, u32::from(TapeLayout::Raw));
+    assert_eq!(tape.state, u32::from(TapeState::Created));
     assert_ne!(tape.merkle_seed, [0; 32]);
     assert_eq!(tape.merkle_root, [0; 32]);
-    assert_eq!(tape.tail, [0; 64]);
+    assert_eq!(tape.opaque_data, [0; 64]);
     assert_eq!(tape.number, 0); // (tapes get a number when finalized)
 
     // Verify writer account
@@ -227,19 +228,38 @@ fn create_and_verify_tape(
     let mut prev_segment = [0; 64];
     let mut total_size = 0;
 
-    for segment_index in 0..10u64 {
-        let data = format!("<segment_{}_data>", segment_index).into_bytes();
+    for write_index in 0..10u64 {
+
+        let opaque_data  = padded_array::<64>(&prev_segment);
+        let segment_data = format!("<segment_{}_data>", write_index).into_bytes();
+
+        // We're going to use the optional opaque_data of a tape to refer to the previous segment's
+        // signature. We could also just write the segment data directly and not prefix it.
+        let data = [
+            opaque_data.as_ref(),
+            segment_data.as_ref(),
+        ].concat();
         total_size += data.len() as u64;
 
         let blockhash = svm.latest_blockhash();
-        let ix = build_write_ix(payer_pk, tape_address, writer_address, Some(prev_segment), &data);
+        let ix = build_write_ix(payer_pk, tape_address, writer_address, &data);
         let tx = Transaction::new_signed_with_payer(&[ix], Some(&payer_pk), &[&payer], blockhash);
         let res = send_tx(svm, tx.clone());
         assert!(res.is_ok());
 
-        let segment = Segment::try_from_bytes(data.as_ref()).unwrap();
-        let res = write_chunks(&mut writer_tree, segment_index, &segment);
-        assert!(res.is_ok());
+        let segments = data.chunks(SEGMENT_SIZE);
+        for (segment_number, segment) in segments.enumerate() {
+            let canonical_segment = padded_array::<SEGMENT_SIZE>(segment);
+
+            assert!(write_segment(
+                &mut writer_tree,
+                (stored_tape.segments.len() + segment_number) as u64,
+                &canonical_segment,
+            ).is_ok());
+
+            // Keep track of the segments written
+            stored_tape.segments.push(canonical_segment.to_vec());
+        }
 
         // Verify writer state
         let account = svm.get_account(&writer_address).unwrap();
@@ -249,14 +269,14 @@ fn create_and_verify_tape(
         // Verify tape state
         let account = svm.get_account(&tape_address).unwrap();
         let tape = Tape::unpack(&account.data).unwrap();
-        assert_eq!(tape.total_segments, segment_index + 1);
+        assert_eq!(tape.total_segments, stored_tape.segments.len() as u64);
         assert_eq!(tape.total_size, total_size);
-        assert_eq!(tape.state, u64::from(TapeState::Writing));
+        assert_eq!(tape.layout, u32::from(TapeLayout::Raw));
+        assert_eq!(tape.state, u32::from(TapeState::Writing));
         assert_eq!(tape.merkle_root, writer_tree.get_root().to_bytes());
-        assert_eq!(tape.tail, prev_segment);
+        assert_eq!(tape.opaque_data, prev_segment);
 
         prev_segment = tx.signatures.first().unwrap().as_ref().try_into().unwrap();
-        stored_tape.segments.push(data.to_vec());
     }
 
     // Finalize tape
@@ -269,7 +289,7 @@ fn create_and_verify_tape(
     // Verify finalized tape
     let account = svm.get_account(&tape_address).unwrap();
     let tape = Tape::unpack(&account.data).unwrap();
-    assert_eq!(tape.state, u64::from(TapeState::Finalized));
+    assert_eq!(tape.state, u32::from(TapeState::Finalized));
     assert_eq!(tape.number, tape_idx + 1);
     assert_eq!(tape.total_segments, 10);
     assert_eq!(tape.total_size, total_size);
@@ -319,34 +339,37 @@ fn compute_challenge_solution(
     stored_tape: &StoredTape,
     miner: &Miner,
     epoch_difficulty: u64,
-) -> (Solution, [u8; CHUNK_SIZE], [[u8; 32]; TREE_HEIGHT]) {
-    let segment_number = compute_recall_segment(&miner.current_challenge, stored_tape.account.total_segments);
-    let chunk_number = compute_recall_chunk(&miner.current_challenge);
+) -> (Solution, [u8; SEGMENT_SIZE], [[u8; 32]; TREE_HEIGHT]) {
+
+    let segment_number = compute_recall_segment(
+        &miner.current_challenge, 
+        stored_tape.account.total_segments
+    ) as usize;
 
     let mut leaves = Vec::new();
-    let mut recall_chunk = [0; CHUNK_SIZE];
+    let mut recall_segment = [0; SEGMENT_SIZE];
 
     for (segment_id, segment_data) in stored_tape.segments.iter().enumerate() {
-        let segment_data = padded_array::<SEGMENT_SIZE>(segment_data);
-        for (chunk_idx, chunk) in segment_data.chunks(CHUNK_SIZE).enumerate() {
-            if segment_id == segment_number as usize && chunk_idx == chunk_number as usize {
-                recall_chunk.copy_from_slice(chunk);
-            }
-            let seg_bytes = (segment_id as u64).to_le_bytes();
-            let idx_bytes = (chunk_idx as u64).to_le_bytes();
-            let leaf = Leaf::new(&[seg_bytes.as_ref(), idx_bytes.as_ref(), chunk]);
-            leaves.push(leaf);
+        if segment_id == segment_number {
+            recall_segment.copy_from_slice(segment_data);
         }
+
+        let data = padded_array::<SEGMENT_SIZE>(segment_data);
+        let leaf = compute_leaf(
+            segment_id as u64,
+            &data,
+        );
+
+        leaves.push(leaf);
     }
 
-    assert_eq!(leaves.len(), stored_tape.account.total_segments as usize * MAGIC_NUMBER);
+    assert_eq!(leaves.len(), stored_tape.account.total_segments as usize);
 
-    let solution = solve_challenge(miner.current_challenge, &recall_chunk, epoch_difficulty).unwrap();
-    assert!(solution.is_valid(&miner.current_challenge, &recall_chunk).is_ok());
+    let solution = solve_challenge(miner.current_challenge, &recall_segment, epoch_difficulty).unwrap();
+    assert!(solution.is_valid(&miner.current_challenge, &recall_segment).is_ok());
 
-    let index = segment_number as usize * MAGIC_NUMBER + chunk_number as usize;
     let merkle_tree = MerkleTree::<{TREE_HEIGHT}>::new(&[stored_tape.account.merkle_seed.as_ref()]);
-    let merkle_proof = merkle_tree.get_merkle_proof(&leaves, index);
+    let merkle_proof = merkle_tree.get_merkle_proof(&leaves, segment_number);
     let merkle_proof = merkle_proof
         .iter()
         .map(|v| v.to_bytes())
@@ -354,7 +377,7 @@ fn compute_challenge_solution(
         .try_into()
         .unwrap();
 
-    (solution, recall_chunk, merkle_proof)
+    (solution, recall_segment, merkle_proof)
 }
 
 fn perform_mining(
@@ -363,7 +386,7 @@ fn perform_mining(
     miner_address: Pubkey,
     tape_address: Pubkey,
     solution: Solution,
-    recall_chunk: [u8; CHUNK_SIZE],
+    recall_segment: [u8; SEGMENT_SIZE],
     merkle_proof: [[u8; 32]; TREE_HEIGHT],
 ) {
     let payer_pk = payer.pubkey();
@@ -376,7 +399,7 @@ fn perform_mining(
         spool_address,
         tape_address,
         solution,
-        recall_chunk,
+        recall_segment,
         merkle_proof,
     );
 
@@ -406,4 +429,3 @@ fn solve_challenge<const N: usize>(
         nonce += 1;
     }
 }
-

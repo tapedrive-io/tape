@@ -7,12 +7,15 @@ use std::{ fs, io::{self, Read}};
 use tokio::{task, time::Duration};
 use indicatif::{ProgressBar, ProgressStyle};
 
+use tape_api::prelude::*;
 use crate::cli::{Cli, Commands};
 use crate::log;
 use tape_client as tapedrive;
 
-const VERIFY_EVERY: usize = 500;
-const WAIT_TIME: u64 = 32;
+const VERIFY_EVERY: usize       = 500;
+const WAIT_TIME: u64            = 32;
+const SEGMENTS_PER_TX: usize    = 7; // 7 x 128 = 896 bytes
+const SAFE_SIZE : usize         = SEGMENT_SIZE * SEGMENTS_PER_TX;
 
 pub async fn handle_write_command(cli: Cli, client: RpcClient, payer: Keypair) -> Result<()> {
     match cli.command {
@@ -25,26 +28,33 @@ pub async fn handle_write_command(cli: Cli, client: RpcClient, payer: Keypair) -
             no_verify,
             raw,
         } => {
+            let should_verify = !no_verify;
+
             // Process input data
             let (data, source_desc) = process_input(filename, message, remote).await?;
+            let layout = match raw {
+                true => TapeLayout::Raw,
+                false => TapeLayout::Compressed,
+            };
 
-            // Prepare data (compress, hash, chunk)
-            let (chunks, _hash) = tapedrive::prepare_data(&data, raw)?;
-            let total_segments = chunks.len();
+            // Apply compression if requested and chunk
+            let with_layout = tapedrive::prepare_data(&data, layout)?;
+            let chunks : Vec<_> = with_layout
+                .chunks(SAFE_SIZE)
+                .map(|c| c.to_vec())
+                .collect();
 
-            // Set tape name, defaulting to timestamp
-            let tape_name = tape_name.unwrap_or_else(|| Utc::now().timestamp().to_string());
+            let tape_name = tape_name
+                .unwrap_or_else(|| Utc::now().timestamp().to_string());
 
-            // Log write operation details
             if cli.verbose {
                 log::print_section_header("Tape Write");
                 log::print_message(&format!("Source: {}", source_desc));
                 log::print_message(&format!("Tape Name: {}", tape_name));
             }
-            log::print_count(&format!("Total Segments: {}", total_segments));
+            log::print_count(&format!("Total Chunks: {}", chunks.len()));
             log::print_divider();
 
-            // Confirm write operation
             if !assume_yes {
                 let proceed = Confirm::with_theme(&ColorfulTheme::default())
                     .with_prompt("→ Begin writing to tape?")
@@ -56,37 +66,29 @@ pub async fn handle_write_command(cli: Cli, client: RpcClient, payer: Keypair) -
                     return Ok(());
                 }
             }
-
             log::print_divider();
 
-            let pb = ProgressBar::new(total_segments as u64);
+            // setup progress bar
+            let pb = ProgressBar::new(chunks.len() as u64);
             pb.set_style(
                 ProgressStyle::default_bar()
                     .template("{spinner:.green} {wide_msg}")
                     .expect("Failed to set progress style"),
             );
-
-            // Spawn a task to steadily tick the spinner
             let pb_clone = pb.clone();
-            let _tick_handle = task::spawn(async move {
+            task::spawn(async move {
                 while !pb_clone.is_finished() {
                     pb_clone.tick();
                     tokio::time::sleep(Duration::from_millis(100)).await;
                 }
             });
 
+            // Create the tape
             pb.set_message("Creating new tape (please wait)...");
+            let (tape_address, writer_address, mut last_sig) =
+                tapedrive::create_tape(&client, &payer, &tape_name, layout).await?;
 
-            // Phase 1: Create tape
-            let (tape_address, writer_address, mut last_signature) =
-                tapedrive::create_tape(&client, &payer, &tape_name).await?;
-
-            // Write segments with verification
-            let mut last_verified_segments = 0;
-            let mut last_verified_tail = last_signature;
-            let mut last_tape_segments = 0;
-            let mut i = 0;
-
+            // Write the tape
             pb.set_message("");
             pb.set_style(
                 ProgressStyle::default_bar()
@@ -94,68 +96,76 @@ pub async fn handle_write_command(cli: Cli, client: RpcClient, payer: Keypair) -
                     .expect("Failed to set progress style"),
             );
 
-            // Phase 2: Write segments
-            while i < total_segments {
+            let mut expected_segments = 0usize;
+            let mut last_good_chunk = 0usize;
+            let mut last_good_segments = 0usize;
+            let mut last_good_sig = last_sig;
+            let mut i = 0usize;
+
+            while i < chunks.len() {
                 let chunk = &chunks[i];
-                last_signature = tapedrive::write_segment(
-                    &client,
-                    &payer,
-                    tape_address,
-                    writer_address,
-                    last_signature,
-                    chunk,
-                )
-                .await?;
+                let (new_sig, used) = tapedrive::write_tape(
+                    &client, 
+                    &payer, 
+                    tape_address, 
+                    writer_address, 
+                    last_sig, 
+                    chunk
+                ).await?;
+
+                last_sig = new_sig;
+                expected_segments += used as usize;
 
                 i += 1;
                 pb.set_position(i as u64);
 
-                if !no_verify && (i % VERIFY_EVERY == 0 || i == total_segments) {
+                let is_checkpoint = i % VERIFY_EVERY == 0 || i == chunks.len();
+                if should_verify && is_checkpoint {
                     pb.set_message("Verifying...");
-
                     tokio::time::sleep(Duration::from_secs(WAIT_TIME)).await;
 
-                    let (tape_account, _) = tapedrive::get_tape_account(&client, &tape_address).await?;
-                    let current_segments = tape_account.total_segments as usize;
-                    let segments_added = current_segments - last_tape_segments;
+                    let (acct, _) = tapedrive::get_tape_account(&client, &tape_address).await?;
+                    let onchain = acct.total_segments as usize;
 
-                    let expected_added = if i % VERIFY_EVERY == 0 {
-                        VERIFY_EVERY as usize
+                    if onchain == expected_segments {
+                        last_good_chunk = i;
+                        last_good_segments = expected_segments;
+                        last_good_sig = last_sig;
                     } else {
-                        total_segments % VERIFY_EVERY
-                    };
-
-                    if segments_added == expected_added {
-                        last_verified_tail = last_signature;
-                        last_verified_segments = i;
-                    } else {
-                        log::print_info(&format!("Verification failed at segment {}", i));
-                        i = last_verified_segments;
-                        last_signature = last_verified_tail;
-
+                        log::print_info(&format!(
+                            "Verification failed at chunk {}; onchain {}, expected {}",
+                            i, onchain, expected_segments
+                        ));
+                        i = last_good_chunk;
+                        expected_segments = last_good_segments;
+                        last_sig = last_good_sig;
                         pb.set_position(i as u64);
-                        log::print_message(&format!("Retrying from segment {}", i));
+                        log::print_message(&format!("Retrying from chunk {}", i));
                     }
 
-                    last_tape_segments = current_segments;
+                    pb.set_message("");
                 }
             }
 
-            // Phase 3: Finalize tape
-            tapedrive::finalize_tape(&client, &payer, tape_address, writer_address, last_signature)
-                .await?;
+            // Finalize the tape (prevents further writes and reclaims sol)
+            tapedrive::finalize_tape(
+                &client,
+                &payer,
+                tape_address,
+                writer_address,
+                last_sig,
+            ).await?;
 
             pb.finish_with_message("");
-
             log::print_divider();
 
-            // Log write results
             if cli.verbose {
                 log::print_divider();
                 log::print_section_header("Metadata");
                 log::print_count(&format!("Tape Address: {}", tape_address));
-                log::print_count(&format!("Total Segments: {}", total_segments));
+                log::print_count(&format!("Total Chunks: {}", chunks.len()));
             }
+
             log::print_divider();
             log::print_info("To read the tape, run:");
             log::print_title(&format!("tapedrive read {}", tape_address));

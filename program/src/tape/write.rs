@@ -34,30 +34,45 @@ pub fn process_write(accounts: &[AccountInfo<'_>], data: &[u8]) -> ProgramResult
     writer_info.has_address(&writer_address)?;
         
     check_condition(
-        tape.state.eq(&u64::from(TapeState::Created)) ||
-        tape.state.eq(&u64::from(TapeState::Writing)),
+        tape.state.eq(&u32::from(TapeState::Created)) ||
+        tape.state.eq(&u32::from(TapeState::Writing)),
         TapeError::UnexpectedState,
     )?;
 
-    // Convert the data to a canonical segment of data and write it to the Merkle tree (all
-    // segments are written as SEGMENT_SIZE bytes, no matter the size of the data)
-    let segment = Segment::try_from_bytes(&args.data)?;
-    let segment_number = tape.total_segments;
+    // Convert the data to a canonical segments of data 
+    // and write them to the Merkle tree (all segments are 
+    // written as SEGMENT_SIZE bytes, no matter the size 
+    // of the data)
 
-    write_chunks(
-        &mut writer.state,
-        segment_number,
-        &segment,
-    )?;
+    let segments = args.data.chunks(SEGMENT_SIZE);
+    let segment_count = segments.len() as u64;
+    for (segment_number, segment) in segments.enumerate() {
+        let canonical_segment = padded_array::<SEGMENT_SIZE>(segment);
 
-    tape.total_segments   += 1;
+        write_segment(
+            &mut writer.state,
+            tape.total_segments + segment_number as u64,
+            &canonical_segment,
+        )?;
+    }
+
+    // The opaque_data is pulled from the first 64 bytes, 
+    // padded to 64 bytes if needed.
+    //
+    // (The opaque_data is used to store additional metadata 
+    // about the tape, for example, pointing at the last 
+    // write operation signature)
+    let opaque_data = padded_array::<64>(&args.data);
+
+    tape.total_segments   += segment_count;
     tape.total_size       += args.data.len() as u64;
     tape.merkle_root       = writer.state.get_root().to_bytes();
-    tape.tail              = args.prev_segment;
+    tape.opaque_data       = opaque_data;
     tape.state             = TapeState::Writing.into();
 
     WriteEvent {
-        segment: segment_number,
+        num_added: segment_count,
+        num_total: tape.total_segments,
         address: tape_address.to_bytes(),
     }
     .log();

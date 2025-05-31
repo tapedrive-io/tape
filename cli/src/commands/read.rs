@@ -1,5 +1,6 @@
 use anyhow::Result;
 use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_sdk::signature::Signature;
 use std::{
     fs,
     io::{self, Write},
@@ -33,12 +34,12 @@ pub async fn handle_read_command(cli: Cli, client: RpcClient) -> Result<()> {
                 }
             });
 
-            // Phase 1: Fetch tape metadata
+            // Fetch tape metadata
             pb.set_message("Fetching tape metadata...");
-            let (total_segments, mut current_signature) =
+            let (total_segments, mut current_signature, layout) =
                 tapedrive::fetch_tape_metadata(&client, &tape).await?;
 
-            // Phase 2: Read segments
+            // Read segments
             pb.set_style(
                 ProgressStyle::default_bar()
                     .template("{spinner:.green} [{bar:40.white/gray}] {pos}/{len} {wide_msg}")
@@ -48,21 +49,31 @@ pub async fn handle_read_command(cli: Cli, client: RpcClient) -> Result<()> {
             pb.set_position(0);
             pb.set_message("");
 
-            let mut segments = Vec::new();
-            let mut segment_index = 0;
+            let mut chunks = Vec::new();
+            let mut chunk_index = 0;
+            let empty_signature = Signature::default();
 
-            while segment_index < total_segments {
-                let (segment_data, prev_signature) =
-                    tapedrive::read_segment(&client, &current_signature).await?;
-                segments.push((segment_index, segment_data));
-                segment_index += 1;
-                pb.set_position(segment_index as u64);
+            loop {
+                if current_signature.eq(&empty_signature) {
+                    break; // No more segments to read
+                }
+
+                let (data, prev_signature) =
+                tapedrive::read_tape(
+                    &client,
+                    &current_signature
+                ).await?;
+
+                chunks.push(data.clone());
+                chunk_index += (data.len() + 64) / 128;
+
+                pb.set_position(chunk_index as u64);
                 current_signature = prev_signature;
             }
 
-            segments.reverse();
+            chunks.reverse();
 
-            // Phase 3: Process data
+            // Process data
             pb.set_style(
                 ProgressStyle::default_spinner()
                     .template("{spinner:.green} {wide_msg}")
@@ -70,7 +81,7 @@ pub async fn handle_read_command(cli: Cli, client: RpcClient) -> Result<()> {
             );
             pb.set_message("Verifying and decompressing data...");
 
-            let result = tapedrive::process_data(&segments)?;
+            let result = tapedrive::process_data(chunks, layout)?;
 
             pb.finish_with_message("");
 
@@ -82,7 +93,7 @@ pub async fn handle_read_command(cli: Cli, client: RpcClient) -> Result<()> {
                 log::print_divider();
             }
 
-            // Phase 4: Write output
+            // Write output
             match output {
                 Some(filename) => {
                     fs::write(&filename, &result.data)?;

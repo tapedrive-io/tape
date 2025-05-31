@@ -88,10 +88,11 @@ async fn try_mine_iteration(
 
         let segments = store.get_tape_segments(&tape_address)?;
         if segments.len() != tape.total_segments as usize {
-            return Err(anyhow!("Invalid number of segments"));
+            return Err(anyhow!("Invalid number of segments for tape {}: expected {}, got {}", 
+                tape_address, tape.total_segments, segments.len()));
         }
 
-        let (solution, recall_chunk, merkle_proof) = compute_challenge_solution(
+        let (solution, recall_segment, merkle_proof) = compute_challenge_solution(
             &tape,
             &miner,
             segments,
@@ -104,7 +105,7 @@ async fn try_mine_iteration(
             *miner_address, 
             tape_address, 
             solution, 
-            recall_chunk, 
+            recall_segment, 
             merkle_proof,
         ).await?;
 
@@ -124,45 +125,45 @@ fn compute_challenge_solution(
     miner: &Miner,
     segments: Vec<(u64, Vec<u8>)>,
     epoch_difficulty: u64,
-) -> Result<(Solution, [u8; CHUNK_SIZE], [[u8; 32]; TREE_HEIGHT])> {
+) -> Result<(Solution, [u8; SEGMENT_SIZE], [[u8; 32]; TREE_HEIGHT])> {
     //println!("DEBUG: Segments: {:?}", segments);
 
-    let recall_segment_num = compute_recall_segment(&miner.current_challenge, tape.total_segments);
-    let recall_chunk_num = compute_recall_chunk(&miner.current_challenge);
+    let segment_number = compute_recall_segment(
+        &miner.current_challenge,
+        tape.total_segments
+    );
 
     let mut leaves = Vec::new();
-    let mut recall_chunk = [0; CHUNK_SIZE];
+    let mut recall_segment = [0; SEGMENT_SIZE];
 
-    let index = recall_segment_num * MAGIC_NUMBER as u64 + recall_chunk_num;
     let mut merkle_tree = MerkleTree::<{TREE_HEIGHT}>::new(&[tape.merkle_seed.as_ref()]);
 
-    for (segment_id, data) in segments.iter() {
-        let segment_id = *segment_id;
-        let segment = Segment::try_from_bytes(&data[65..])?;
-
-        for (chunk_id, chunk) in segment.chunks().enumerate() {
-            let chunk_id = chunk_id as u64;
-            if segment_id == recall_segment_num && chunk_id == recall_chunk_num {
-                recall_chunk.copy_from_slice(chunk.as_bytes());
-            }
-
-            let leaf = compute_leaf(
-                segment_id, 
-                chunk_id, 
-                &chunk,
-            );
-
-            leaves.push(leaf);
-
-            // TODO: we don't actually need to do this, this is just for debugging and making sure
-            // the local root matches the tape root
-            merkle_tree.try_add_leaf(leaf).unwrap();
+    for (segment_id, segment_data) in segments.iter() {
+        if *segment_id == segment_number {
+            recall_segment.copy_from_slice(segment_data);
         }
+
+        // Create our canonical segment of exactly SEGMENT_SIZE bytes 
+        // and compute the merkle leaf
+
+        let data = padded_array::<SEGMENT_SIZE>(segment_data);
+        let leaf = compute_leaf(
+            *segment_id,
+            &data,
+        );
+
+        leaves.push(leaf);
+
+        // TODO: we don't actually need to do this, this is just for 
+        // debugging and making sure the local root matches the tape root
+        merkle_tree.try_add_leaf(leaf).map_err(|e| {
+            anyhow!("Failed to add leaf to Merkle tree: {:?}", e)
+        })?;
     }
 
     //println!("DEBUG: Merkle root: {:?}", merkle_tree.get_root());
 
-    let merkle_proof = merkle_tree.get_merkle_proof(&leaves, index as usize);
+    let merkle_proof = merkle_tree.get_merkle_proof(&leaves, segment_number as usize);
     let merkle_proof = merkle_proof
         .iter()
         .map(|v| v.to_bytes())
@@ -178,18 +179,18 @@ fn compute_challenge_solution(
 
     let solution = solve_challenge(
         miner.current_challenge, 
-        &recall_chunk, 
+        &recall_segment, 
         epoch_difficulty
     )?;
 
     println!("DEBUG: Solution difficulty: {:?}", solution.difficulty());
 
-    solution.is_valid(&miner.current_challenge, &recall_chunk)
+    solution.is_valid(&miner.current_challenge, &recall_segment)
         .map_err(|_| anyhow!("Invalid solution"))?;
 
     println!("DEBUG: Solution is valid!");
 
-    Ok((solution, recall_chunk, merkle_proof))
+    Ok((solution, recall_segment, merkle_proof))
 }
 
 fn solve_challenge<const N: usize>(
@@ -209,4 +210,3 @@ fn solve_challenge<const N: usize>(
         nonce += 1;
     }
 }
-

@@ -27,7 +27,6 @@ pub fn process_instruction(
         *signer_info.key,
         *tape_info.key,
         *writer_info.key,
-        None,
         &your_data
     );
 

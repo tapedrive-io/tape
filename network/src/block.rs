@@ -16,6 +16,7 @@ use solana_transaction_status::{
     UiConfirmedBlock
 };
 use tape_api::prelude::{
+    SEGMENT_SIZE,
     WriteEvent,
     FinalizeEvent,
     InstructionType,
@@ -137,31 +138,44 @@ fn merge_events_and_instructions(
         return Err(BlockError::CountMismatch("events and instructions"));
     }
 
-    let mut tapes: HashMap<Pubkey, u64> = HashMap::new();
-    let mut writes: HashMap<(Pubkey, u64), Vec<u8>> = HashMap::new();
+    let mut tapes = HashMap::new();
+    let mut writes = HashMap::new();
 
     // Iterate over events and instructions in parallel
-    for (event, instruction) in tape_block.events.iter().zip(tape_block.instructions.iter()) {
+    for (event, instruction) in tape_block.events.iter().zip(&tape_block.instructions) {
         match (event, instruction) {
             (TapeEvent::Write(write_event), TapeInstruction::Write { address, data }) => {
-                // Verify addresses match
                 if write_event.address != address.to_bytes() {
-                    return Err(BlockError::InvalidData("Mismatched addresses in write event and instruction"));
+                    return Err(BlockError::InvalidData("Write event and instruction address mismatch"));
                 }
-                // Populate writes map: (tape_address, segment) -> data
-                writes.insert((*address, write_event.segment), data.clone());
+
+                let base = write_event
+                    .num_total
+                    .saturating_sub(write_event.num_added);
+
+                // A single write instruction can contain multiple segments
+                let segments: Vec<&[u8]> = data.chunks(SEGMENT_SIZE).collect();
+
+                // Sanity check: number of chunks must match num_added
+                if segments.len() as u64 != write_event.num_added {
+                    return Err(BlockError::InvalidData("Segment count does not match num_added"));
+                }
+
+                for (i, segment) in segments.into_iter().enumerate() {
+                    let segment_number = base + i as u64;
+                    writes.insert((*address, segment_number), segment.to_vec());
+                }
             }
+
             (TapeEvent::Finalize(finalize_event), TapeInstruction::Finalize { address }) => {
-                // Verify addresses match
                 if finalize_event.address != address.to_bytes() {
-                    return Err(BlockError::InvalidData("Mismatched addresses in finalize event and instruction"));
+                    return Err(BlockError::InvalidData("Finalize event and instruction address mismatch"));
                 }
-                // Populate tapes map: tape_address -> tape_number
+
                 tapes.insert(*address, finalize_event.tape);
             }
-            _ => {
-                return Err(BlockError::InvalidData("Mismatched event and instruction types"));
-            }
+
+            _ => return Err(BlockError::InvalidData("Event/instruction type mismatch")),
         }
     }
 

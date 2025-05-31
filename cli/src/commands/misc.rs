@@ -1,9 +1,6 @@
 use anyhow::Result;
 use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_sdk::{
-    pubkey::Pubkey,
-    signature::Signature,
-};
+use solana_sdk::pubkey::Pubkey;
 use crate::cli::{Cli, Commands};
 use crate::log;
 use tape_client as tapedrive;
@@ -49,13 +46,11 @@ pub async fn handle_misc_commands(cli: Cli, client: RpcClient) -> Result<()> {
         Commands::GetTape { pubkey } => {
             let tape_address: Pubkey = pubkey.parse()?;
             let (tape, _) = tapedrive::get_tape_account(&client, &tape_address).await?;
-            let sig = &Signature::from(tape.tail);
             log::print_section_header("Tape Account");
             log::print_message(&format!("Id: {}", tape.number));
             log::print_message(&format!("Name: {}", from_name(&tape.name)));
             log::print_message(&format!("Address: {}", tape_address));
             log::print_message(&format!("Authority: {}", tape.authority));
-            log::print_message(&format!("Tail: {}", sig));
             log::print_message(&format!("Total Segments: {}", tape.total_segments));
             log::print_message(&format!("Total Size: {} bytes", tape.total_size));
             log::print_message(&format!("State: {}", tape.state));

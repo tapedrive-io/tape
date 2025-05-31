@@ -15,7 +15,8 @@ pub enum EventType {
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Pod, Zeroable)]
 pub struct WriteEvent {
-    pub segment: u64,
+    pub num_added: u64,
+    pub num_total: u64,
     pub address: [u8; 32],
 }
 

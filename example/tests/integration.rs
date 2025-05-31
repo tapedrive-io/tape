@@ -52,11 +52,19 @@ fn run_integration() {
     let mut local_tree = MerkleTree::new(&[tape.merkle_seed.as_ref()]); 
 
     let data = vec![42; 1024];
-    let segment = Segment::try_from_bytes(&data).unwrap();
 
-    assert!(write_chunks(&mut local_tree, 0, &segment).is_ok());
+    let segments = data.chunks(SEGMENT_SIZE);
+    for (segment_number, segment) in segments.enumerate() {
+        let canonical_segment = padded_array::<SEGMENT_SIZE>(segment);
 
-    assert_eq!(tape.total_segments, 1);
+        assert!(write_segment(
+            &mut local_tree,
+            segment_number as u64,
+            &canonical_segment,
+        ).is_ok());
+    }
+
+    assert_eq!(tape.total_segments, 1024 / SEGMENT_SIZE as u64);
     assert_eq!(tape.merkle_root, local_tree.get_root().as_ref());
 }
 

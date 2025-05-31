@@ -28,12 +28,12 @@ const-crypto = "0.3.0"
 crankx = { version = "0.2.2", features = ["solana"] }
 
 # solana-specific
-solana-client = "=2.2"
-solana-program = "=2.2"
-solana-sdk = "=2.2"
-solana-transaction-status = "=2.2"
-solana-account-decoder = "=2.2"
-solana-transaction-status-client-types = "=2.2"
+solana-client = "=2.1"
+solana-program = "=2.1"
+solana-sdk = "=2.1"
+solana-transaction-status = "=2.1"
+solana-account-decoder = "=2.1"
+solana-transaction-status-client-types = "=2.1"
 
 steel = { version="4.0.0", features = ["spl"] }
 litesvm = "0.5.0"

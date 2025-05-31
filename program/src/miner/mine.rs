@@ -89,10 +89,6 @@ pub fn process_mine(accounts: &[AccountInfo], data: &[u8]) -> ProgramResult {
         tape.total_segments
     );
 
-    let chunk_number = compute_recall_chunk(
-        &miner.current_challenge, 
-    );
-
     solana_program::msg!(
         "Recall tape: {}",
         tape.number
@@ -103,19 +99,13 @@ pub fn process_mine(accounts: &[AccountInfo], data: &[u8]) -> ProgramResult {
         segment_number
     );
 
-    solana_program::msg!(
-        "Recall chunk: {}",
-        chunk_number
-    );
-
     // Validate that the miner actually has the data for the tape
 
     let merkle_root = tape.merkle_root;
     let merkle_proof = &args.recall_proof;
     let leaf = Leaf::new(&[
         (segment_number as u64).to_le_bytes().as_ref(),
-        (chunk_number as u64).to_le_bytes().as_ref(),
-        args.recall_chunk.as_ref(),
+        args.recall_segment.as_ref(),
     ]);
 
     assert!(merkle_proof.len() == PROOF_LEN as usize);
@@ -135,7 +125,7 @@ pub fn process_mine(accounts: &[AccountInfo], data: &[u8]) -> ProgramResult {
 
     // Verify that the PoW solution is good
     check_condition(
-        solution.is_valid(&miner.current_challenge, &args.recall_chunk).is_ok(),
+        solution.is_valid(&miner.current_challenge, &args.recall_segment).is_ok(),
         TapeError::SolutionInvalid,
     )?;
 
@@ -317,4 +307,3 @@ fn compute_final_reward(
         .min(target_rate);
     final_reward
 }
-

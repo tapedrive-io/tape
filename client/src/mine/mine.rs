@@ -18,7 +18,7 @@ pub async fn perform_mining(
     miner_address: Pubkey,
     tape_address: Pubkey,
     solution: Solution,
-    recall_chunk: [u8; CHUNK_SIZE],
+    recall_segment: [u8; SEGMENT_SIZE],
     merkle_proof: [[u8; 32]; TREE_HEIGHT],
 ) -> Result<Signature> {
     let spool_number = rand::thread_rng().gen_range(0..SPOOL_COUNT);
@@ -31,7 +31,7 @@ pub async fn perform_mining(
         spool_address,
         tape_address,
         solution,
-        recall_chunk,
+        recall_segment,
         merkle_proof,
     );
 
