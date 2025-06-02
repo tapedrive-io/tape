@@ -4,7 +4,6 @@ use crankx::Solution;
 use crate::{
     consts::*, 
     instruction::*, 
-    state::*,
     pda::*,
     utils,
 };
@@ -12,10 +11,10 @@ use crate::{
 pub fn build_create_ix(
     signer: Pubkey,
     name: &str,
-    layout: TapeLayout
+    header: Option<[u8; HEADER_SIZE]>,
 ) -> Instruction {
     let name = utils::to_name(name);
-    let layout: [u8; 4] = u32::from(layout).to_le_bytes();
+    let header = header.unwrap_or([0; HEADER_SIZE]);
 
     let (tape_address, _tape_bump) = tape_pda(signer, &name);
     let (writer_address, _writer_bump) = writer_pda(tape_address);
@@ -32,7 +31,7 @@ pub fn build_create_ix(
         ],
         data: Create {
             name,
-            layout,
+            header,
         }.to_bytes(),
     }
 }
@@ -44,6 +43,9 @@ pub fn build_write_ix(
     data: &[u8],
 ) -> Instruction {
 
+    let mut ix_data = Write{}.to_bytes();
+    ix_data.extend_from_slice(data);
+
     Instruction {
         program_id: crate::ID,
         accounts: vec![
@@ -51,7 +53,35 @@ pub fn build_write_ix(
             AccountMeta::new(tape, false),
             AccountMeta::new(writer, false),
         ],
-        data: Write::new().pack(data),
+        data: ix_data,
+    }
+}
+
+pub fn build_update_ix(
+    signer: Pubkey,
+    tape: Pubkey,
+    writer: Pubkey,
+    segment_number: u64,
+    old_data: [u8; SEGMENT_SIZE],
+    new_data: [u8; SEGMENT_SIZE],
+    proof: [[u8;32]; PROOF_LEN],
+) -> Instruction {
+
+    let segment_number = segment_number.to_le_bytes();
+
+    Instruction {
+        program_id: crate::ID,
+        accounts: vec![
+            AccountMeta::new(signer, true),
+            AccountMeta::new(tape, false),
+            AccountMeta::new(writer, false),
+        ],
+        data: Update {
+            segment_number,
+            old_data,
+            new_data,
+            proof,
+        }.to_bytes(),
     }
 }
 
@@ -59,8 +89,9 @@ pub fn build_finalize_ix(
     signer: Pubkey, 
     tape: Pubkey,
     writer: Pubkey,
-    opaque_data: [u8; 64],
+    header: Option<[u8; HEADER_SIZE]>,
 ) -> Instruction {
+    let header = header.unwrap_or([0; HEADER_SIZE]);
 
     Instruction {
         program_id: crate::ID,
@@ -73,7 +104,7 @@ pub fn build_finalize_ix(
             AccountMeta::new_readonly(sysvar::rent::ID, false),
         ],
         data: Finalize {
-            opaque_data,
+            header,
         }.to_bytes(),
     }
 }

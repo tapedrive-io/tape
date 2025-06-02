@@ -7,7 +7,7 @@ use crate::state;
 #[derive(Clone, Copy, Debug, PartialEq, Pod, Zeroable)]
 pub struct Miner {
     pub authority: Pubkey,
-    pub name: [u8; MAX_NAME_LEN],
+    pub name: [u8; NAME_LEN],
 
     pub unclaimed_rewards: u64,
 

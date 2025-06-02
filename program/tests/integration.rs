@@ -188,12 +188,13 @@ fn create_and_verify_tape(
 ) {
     let payer_pk = payer.pubkey();
     let tape_name = format!("tape-name-{}", tape_idx);
+    let tape_header = [42; HEADER_SIZE]; // Can be anything
     let (tape_address, _tape_bump) = tape_pda(payer_pk, &to_name(&tape_name));
     let (writer_address, _writer_bump) = writer_pda(tape_address);
 
     // Create tape
     let blockhash = svm.latest_blockhash();
-    let ix = build_create_ix(payer_pk, &tape_name, TapeLayout::Raw);
+    let ix = build_create_ix(payer_pk, &tape_name, Some(tape_header));
     let tx = Transaction::new_signed_with_payer(&[ix], Some(&payer_pk), &[&payer], blockhash);
     let res = send_tx(svm, tx);
     assert!(res.is_ok());
@@ -203,11 +204,10 @@ fn create_and_verify_tape(
     let tape = Tape::unpack(&account.data).unwrap();
     assert_eq!(tape.authority, payer_pk);
     assert_eq!(tape.name, to_name(&tape_name));
-    assert_eq!(tape.layout, u32::from(TapeLayout::Raw));
-    assert_eq!(tape.state, u32::from(TapeState::Created));
+    assert_eq!(tape.state, u64::from(TapeState::Created));
     assert_ne!(tape.merkle_seed, [0; 32]);
     assert_eq!(tape.merkle_root, [0; 32]);
-    assert_eq!(tape.opaque_data, [0; 64]);
+    assert_eq!(tape.header, tape_header);
     assert_eq!(tape.number, 0); // (tapes get a number when finalized)
 
     // Verify writer account
@@ -225,20 +225,10 @@ fn create_and_verify_tape(
     };
 
     // Write segments
-    let mut prev_segment = [0; 64];
     let mut total_size = 0;
 
     for write_index in 0..10u64 {
-
-        let opaque_data  = padded_array::<64>(&prev_segment);
-        let segment_data = format!("<segment_{}_data>", write_index).into_bytes();
-
-        // We're going to use the optional opaque_data of a tape to refer to the previous segment's
-        // signature. We could also just write the segment data directly and not prefix it.
-        let data = [
-            opaque_data.as_ref(),
-            segment_data.as_ref(),
-        ].concat();
+        let data = format!("<segment_{}_data>", write_index).into_bytes();
         total_size += data.len() as u64;
 
         let blockhash = svm.latest_blockhash();
@@ -255,7 +245,8 @@ fn create_and_verify_tape(
                 &mut writer_tree,
                 (stored_tape.segments.len() + segment_number) as u64,
                 &canonical_segment,
-            ).is_ok());
+            )
+            .is_ok());
 
             // Keep track of the segments written
             stored_tape.segments.push(canonical_segment.to_vec());
@@ -271,25 +262,110 @@ fn create_and_verify_tape(
         let tape = Tape::unpack(&account.data).unwrap();
         assert_eq!(tape.total_segments, stored_tape.segments.len() as u64);
         assert_eq!(tape.total_size, total_size);
-        assert_eq!(tape.layout, u32::from(TapeLayout::Raw));
-        assert_eq!(tape.state, u32::from(TapeState::Writing));
+        assert_eq!(tape.state, u64::from(TapeState::Writing));
         assert_eq!(tape.merkle_root, writer_tree.get_root().to_bytes());
-        assert_eq!(tape.opaque_data, prev_segment);
-
-        prev_segment = tx.signatures.first().unwrap().as_ref().try_into().unwrap();
+        assert_eq!(tape.header, tape_header);
     }
+
+    // Update a segment to ensure the update instruction works
+    // pick a segment to update (e.g., the first one)
+    let target_segment: u64 = 0;
+
+    // reconstruct leaves for proof
+    let mut leaves = Vec::new();
+    for (segment_id, segment_data) in stored_tape.segments.iter().enumerate() {
+        let data_array = padded_array::<SEGMENT_SIZE>(segment_data);
+        let leaf = compute_leaf(segment_id as u64, &data_array);
+        leaves.push(leaf);
+    }
+
+    // compute Merkle proof for the target segment
+    let merkle_proof_vec = writer_tree.get_merkle_proof(&leaves, target_segment as usize);
+    let merkle_proof: [[u8; 32]; PROOF_LEN] = merkle_proof_vec
+        .iter()
+        .map(|v| v.to_bytes())
+        .collect::<Vec<_>>()
+        .try_into()
+        .unwrap();
+
+    // old_data is the current canonical segment
+    let old_data_array: [u8; SEGMENT_SIZE] = stored_tape.segments[target_segment as usize]
+        .clone()
+        .try_into()
+        .unwrap();
+
+    // prepare new data for that segment
+    let new_raw = b"<segment_0_updated>";
+    let new_data_array = padded_array::<SEGMENT_SIZE>(new_raw);
+
+    // send the update transaction
+    let blockhash = svm.latest_blockhash();
+    let ix = build_update_ix(
+        payer_pk,
+        tape_address,
+        writer_address,
+        target_segment,
+        old_data_array,
+        new_data_array,
+        merkle_proof,
+    );
+    let tx = Transaction::new_signed_with_payer(&[ix], Some(&payer_pk), &[&payer], blockhash);
+    let res = send_tx(svm, tx);
+    assert!(res.is_ok());
+
+    // update the local tree to reflect the new leaf
+    assert!(update_segment(
+        &mut writer_tree, 
+        target_segment, 
+        &old_data_array,
+        &new_data_array,
+        &merkle_proof,
+    ).is_ok());
+
+    // update stored_tape.segments to hold the new canonical data
+    stored_tape.segments[target_segment as usize] = new_data_array.to_vec();
+
+    // Verify writer state after update
+    let account = svm.get_account(&writer_address).unwrap();
+    let writer = Writer::unpack(&account.data).unwrap();
+    assert_eq!(writer.state, writer_tree);
+
+    // Verify tape state after update
+    let account = svm.get_account(&tape_address).unwrap();
+    let tape = Tape::unpack(&account.data).unwrap();
+    assert_eq!(tape.total_segments, 10);
+    assert_eq!(tape.total_size, total_size);
+    assert_eq!(tape.state, u64::from(TapeState::Writing));
+    assert_eq!(tape.merkle_root, writer_tree.get_root().to_bytes());
+    assert_eq!(tape.header, tape_header);
 
     // Finalize tape
     let blockhash = svm.latest_blockhash();
-    let ix = build_finalize_ix(payer_pk, tape_address, writer_address, prev_segment);
+    let ix = build_finalize_ix(payer_pk, tape_address, writer_address, None);
     let tx = Transaction::new_signed_with_payer(&[ix], Some(&payer_pk), &[&payer], blockhash);
     let res = send_tx(svm, tx.clone());
     assert!(res.is_ok());
 
+    // Try another update, it should fail this time
+    // reuse the same old_data/new_data and proof (proof is now stale but the tx should be rejected due to finalized state)
+    let blockhash = svm.latest_blockhash();
+    let ix = build_update_ix(
+        payer_pk,
+        tape_address,
+        writer_address,
+        target_segment,
+        old_data_array,
+        new_data_array,
+        merkle_proof,
+    );
+    let tx = Transaction::new_signed_with_payer(&[ix], Some(&payer_pk), &[&payer], blockhash);
+    let res = send_tx(svm, tx);
+    assert!(res.is_err());
+
     // Verify finalized tape
     let account = svm.get_account(&tape_address).unwrap();
     let tape = Tape::unpack(&account.data).unwrap();
-    assert_eq!(tape.state, u32::from(TapeState::Finalized));
+    assert_eq!(tape.state, u64::from(TapeState::Finalized));
     assert_eq!(tape.number, tape_idx + 1);
     assert_eq!(tape.total_segments, 10);
     assert_eq!(tape.total_size, total_size);
@@ -339,8 +415,7 @@ fn compute_challenge_solution(
     stored_tape: &StoredTape,
     miner: &Miner,
     epoch_difficulty: u64,
-) -> (Solution, [u8; SEGMENT_SIZE], [[u8; 32]; TREE_HEIGHT]) {
-
+) -> (Solution, [u8; SEGMENT_SIZE], [[u8; 32]; PROOF_LEN]) {
     let segment_number = compute_recall_segment(
         &miner.current_challenge, 
         stored_tape.account.total_segments
@@ -387,7 +462,7 @@ fn perform_mining(
     tape_address: Pubkey,
     solution: Solution,
     recall_segment: [u8; SEGMENT_SIZE],
-    merkle_proof: [[u8; 32]; TREE_HEIGHT],
+    merkle_proof: [[u8; 32]; PROOF_LEN],
 ) {
     let payer_pk = payer.pubkey();
     let (spool_address, _spool_bump) = spool_pda(0);

@@ -8,9 +8,9 @@ pub enum EventType {
     Unknown = 0,
 
     WriteEvent,
+    UpdateEvent,
     FinalizeEvent,
 }
-
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Pod, Zeroable)]
@@ -22,10 +22,18 @@ pub struct WriteEvent {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Pod, Zeroable)]
+pub struct UpdateEvent {
+    pub segment_number: u64,
+    pub address: [u8; 32],
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Pod, Zeroable)]
 pub struct FinalizeEvent {
     pub tape: u64,
     pub address: [u8; 32],
 }
 
 event!(EventType, WriteEvent);
+event!(EventType, UpdateEvent);
 event!(EventType, FinalizeEvent);

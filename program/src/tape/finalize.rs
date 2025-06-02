@@ -48,7 +48,7 @@ pub fn process_finalize(accounts: &[AccountInfo<'_>], data: &[u8]) -> ProgramRes
 
     // Can't finalize if the tape with no data on it.
     check_condition(
-        tape.state.eq(&u32::from(TapeState::Writing)),
+        tape.state.eq(&u64::from(TapeState::Writing)),
         TapeError::UnexpectedState,
     )?;
 
@@ -57,7 +57,7 @@ pub fn process_finalize(accounts: &[AccountInfo<'_>], data: &[u8]) -> ProgramRes
     tape.number            = archive.tapes_stored;
     tape.state             = TapeState::Finalized.into();
     tape.merkle_root       = writer.state.get_root().into();
-    tape.opaque_data       = args.opaque_data;
+    tape.header            = args.header;
 
     // Close the writer and return rent to signer.
     writer_info.close(signer_info)?;

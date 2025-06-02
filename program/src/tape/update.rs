@@ -1,7 +1,10 @@
+use brine_tree::Leaf;
 use tape_api::prelude::*;
 use steel::*;
 
-pub fn process_write(accounts: &[AccountInfo<'_>], data: &[u8]) -> ProgramResult {
+pub fn process_update(accounts: &[AccountInfo<'_>], data: &[u8]) -> ProgramResult {
+    let args = Update::try_from_bytes(data)?;
+
     let [
         signer_info, 
         tape_info,
@@ -38,34 +41,38 @@ pub fn process_write(accounts: &[AccountInfo<'_>], data: &[u8]) -> ProgramResult
         TapeError::UnexpectedState,
     )?;
 
-    // Convert the data to a canonical segments of data 
-    // and write them to the Merkle tree (all segments are 
-    // written as SEGMENT_SIZE bytes, no matter the size 
-    // of the data)
+    let segment_number = args.segment_number;
+    let merkle_proof   = args.proof;
 
-    let segments = data.chunks(SEGMENT_SIZE);
-    let segment_count = segments.len() as u64;
-    for (segment_number, segment) in segments.enumerate() {
-        let canonical_segment = padded_array::<SEGMENT_SIZE>(segment);
+    assert!(args.old_data.len() == SEGMENT_SIZE);
+    assert!(args.new_data.len() == SEGMENT_SIZE);
+    assert!(merkle_proof.len() == PROOF_LEN);
 
-        write_segment(
-            &mut writer.state,
-            tape.total_segments + segment_number as u64,
-            &canonical_segment,
-        )?;
-    }
+    let old_leaf = Leaf::new(&[
+        segment_number.as_ref(), // u64_le_bytes
+        args.old_data.as_ref(),
+    ]);
 
-    tape.total_segments   += segment_count;
-    tape.total_size       += data.len() as u64;
-    tape.merkle_root       = writer.state.get_root().to_bytes();
-    tape.state             = TapeState::Writing.into();
+    let new_leaf = Leaf::new(&[
+        segment_number.as_ref(), // u64_le_bytes
+        args.new_data.as_ref(),
+    ]);
 
-    WriteEvent {
-        num_added: segment_count,
-        num_total: tape.total_segments,
+    writer.state.try_replace_leaf(
+        &merkle_proof,
+        old_leaf, 
+        new_leaf
+    )
+    .map_err(|_| TapeError::WriteFailed)?;
+
+    tape.merkle_root = writer.state.get_root().to_bytes();
+
+    UpdateEvent {
+        segment_number: u64::from_le_bytes(segment_number),
         address: tape_address.to_bytes(),
     }
     .log();
 
     Ok(())
 }
+

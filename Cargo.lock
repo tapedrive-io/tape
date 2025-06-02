@@ -698,9 +698,9 @@ dependencies = [
 
 [[package]]
 name = "brine-tree"
-version = "0.5.3"
+version = "0.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "544bd94d6cb4fee083cdc6a62af5c4fae36d3023a3f3c1d6f37de1eba2be1350"
+checksum = "4b1edc699dff283cdda4f59a74aedc5aa24cbdb84482e264c5778e4cd8665ca4"
 dependencies = [
  "bytemuck",
  "sha3",

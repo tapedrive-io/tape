@@ -4,6 +4,7 @@ use crate::error::*;
 use brine_tree::{MerkleTree, Leaf};
 
 /// Helper: check a condition is true and return an error if not
+#[inline(always)]
 pub fn check_condition<E>(condition: bool, err: E) -> ProgramResult
 where
     E: Into<ProgramError>,
@@ -15,6 +16,7 @@ where
 }
 
 /// Helper: convert a slice to a fixed-size array, truncating or padding with zeros as needed
+#[inline(always)]
 pub fn padded_array<const N: usize>(input: &[u8]) -> [u8; N] {
     let mut out = [0u8; N];
     let len = input.len().min(N);
@@ -23,13 +25,15 @@ pub fn padded_array<const N: usize>(input: &[u8]) -> [u8; N] {
 }
 
 /// Helper: convert a name to a fixed-size array
-pub fn to_name(val: &str) -> [u8; MAX_NAME_LEN] {
-    assert!(val.len() <= MAX_NAME_LEN, "name too long");
-    padded_array::<MAX_NAME_LEN>(val.as_bytes())
+#[inline(always)]
+pub fn to_name(val: &str) -> [u8; NAME_LEN] {
+    assert!(val.len() <= NAME_LEN, "name too long");
+    padded_array::<NAME_LEN>(val.as_bytes())
 }
 
 /// Helper: convert a name to a string
-pub fn from_name(val: &[u8; MAX_NAME_LEN]) -> String {
+#[inline(always)]
+pub fn from_name(val: &[u8; NAME_LEN]) -> String {
     let mut name_bytes = val.to_vec();
     name_bytes.retain(|&x| x != 0);
     String::from_utf8(name_bytes).unwrap()
@@ -49,7 +53,7 @@ pub fn compute_leaf(
     ])
 }
 
-/// Helper: write chunks to the Merkle tree
+/// Helper: write segment to the Merkle tree
 #[inline(always)]
 pub fn write_segment(
     tree: &mut MerkleTree<{TREE_HEIGHT}>,
@@ -69,7 +73,33 @@ pub fn write_segment(
     Ok(())
 }
 
-// Helper: compute the recall tape number from a given challenge
+/// Helper: update segment in the Merkle tree
+#[inline(always)]
+pub fn update_segment(
+    tree: &mut MerkleTree<{TREE_HEIGHT}>,
+    segment_id: u64,
+    old_segment: &[u8; SEGMENT_SIZE],
+    new_segment: &[u8; SEGMENT_SIZE],
+    proof: &[[u8; 32]; PROOF_LEN],
+) -> ProgramResult {
+
+    let old_leaf = compute_leaf(
+        segment_id, 
+        &old_segment);
+
+    let new_leaf = compute_leaf(
+        segment_id, 
+        &new_segment);
+
+    check_condition(
+        tree.try_replace_leaf(proof, old_leaf, new_leaf).is_ok(),
+        TapeError::WriteFailed,
+    )?;
+
+    Ok(())
+}
+
+/// Helper: compute the recall tape number from a given challenge
 #[inline(always)]
 pub fn compute_recall_tape(
     challenge: &[u8; 32],
@@ -86,7 +116,7 @@ pub fn compute_recall_tape(
         .max(1)
 }
 
-// Helper: compute the recall segment number from a given challenge
+/// Helper: compute the recall segment number from a given challenge
 #[inline(always)]
 pub fn compute_recall_segment(
     challenge: &[u8; 32],

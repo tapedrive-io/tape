@@ -1,5 +1,4 @@
 use steel::*;
-use core::marker::PhantomData;
 use crate::consts::*;
 
 #[repr(u8)]
@@ -12,6 +11,7 @@ pub enum InstructionType {
     // Tape instructions
     Create,
     Write,
+    Update,
     Finalize,
 
     // Miner instructions
@@ -26,6 +26,7 @@ instruction!(InstructionType, Advance);
 
 instruction!(InstructionType, Create);
 instruction!(InstructionType, Write);
+instruction!(InstructionType, Update);
 instruction!(InstructionType, Finalize);
 
 instruction!(InstructionType, Register);
@@ -45,50 +46,29 @@ pub struct Advance {}
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub struct Create {
-    pub name: [u8; MAX_NAME_LEN],
-    pub layout: [u8; 4],
+    pub name: [u8; NAME_LEN],
+    pub header: [u8; HEADER_SIZE],
 }
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub struct Write {
-    _data: PhantomData<[u8]>,
+    // Phantom Vec<u8> to ensure the size is dynamic
 }
 
-impl Write {
-    pub fn new() -> Self {
-        Self {
-            _data: PhantomData,
-        }
-    }
-
-    pub fn pack(&self, data: &[u8]) -> Vec<u8> {
-        let discriminator = InstructionType::Write as u8;
-        let mut result = Vec::with_capacity(1 + data.len());
-        result.push(discriminator);
-        result.extend_from_slice(data);
-        result
-    }
-}
-
-pub struct ParsedWrite {
-    pub data: Vec<u8>,
-}
-
-impl ParsedWrite {
-    pub fn try_from_bytes(data: &[u8]) -> Result<Self, ProgramError> {
-        let data = data.to_vec();
-
-        Ok(Self {
-            data,
-        })
-    }
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Pod, Zeroable)]
+pub struct Update {
+    pub segment_number: [u8; 8],
+    pub old_data: [u8; SEGMENT_SIZE],
+    pub new_data: [u8; SEGMENT_SIZE],
+    pub proof: [[u8; 32]; PROOF_LEN],
 }
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub struct Finalize {
-    pub opaque_data: [u8; 64],
+    pub header: [u8; HEADER_SIZE],
 }
 
 #[repr(C)]

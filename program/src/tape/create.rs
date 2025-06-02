@@ -70,18 +70,15 @@ pub fn process_create(accounts: &[AccountInfo<'_>], data: &[u8]) -> ProgramResul
         ],
     ]);
 
-    let layout = u32::from_le_bytes(args.layout);
-
     tape.number            = 0; // (tapes get a number when finalized)
     tape.authority         = *signer_info.key;
     tape.name              = args.name;
     tape.state             = TapeState::Created.into();
-    tape.layout            = layout;
     tape.total_segments    = 0;
     tape.total_size        = 0;
     tape.merkle_seed       = empty_seed.to_bytes();
     tape.merkle_root       = [0; 32];
-    tape.opaque_data       = [0; 64];
+    tape.header            = args.header;
 
     writer.tape            = *tape_info.key;
     writer.state           = MerkleTree::new(&[empty_seed.as_ref()]);

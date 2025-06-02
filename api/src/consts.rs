@@ -25,7 +25,8 @@ pub const SEGMENT_SIZE: usize              = 128; // Bytes (chosen to fit recall
 pub const MAX_TAPE_SIZE: usize             = 2_usize.pow(TREE_HEIGHT as u32) * SEGMENT_SIZE; // 32MB
 
 pub const SPOOL_COUNT: usize               = 8;
-pub const MAX_NAME_LEN: usize              = 32;
+pub const NAME_LEN: usize                  = 32;  // Bytes
+pub const HEADER_SIZE: usize               = 128; // Bytes
 
 pub const TOKEN_DECIMALS: u8               = 10;
 pub const ONE_TAPE: u64                    = 10u64.pow(TOKEN_DECIMALS as u32);

@@ -42,7 +42,7 @@ pub fn spool_pda(id: u8) -> (Pubkey, u8) {
     Pubkey::find_program_address(&[SPOOL, &[id]], &crate::id())
 }
 
-pub fn tape_pda(authority: Pubkey, name: &[u8; MAX_NAME_LEN]) -> (Pubkey, u8) {
+pub fn tape_pda(authority: Pubkey, name: &[u8; NAME_LEN]) -> (Pubkey, u8) {
     Pubkey::find_program_address(&[TAPE, authority.as_ref(), name.as_ref()], &crate::id())
 }
 
@@ -50,7 +50,7 @@ pub fn writer_pda(tape: Pubkey) -> (Pubkey, u8) {
     Pubkey::find_program_address(&[WRITER, tape.as_ref()], &crate::id())
 }
 
-pub fn miner_pda(authority: Pubkey, name: [u8; MAX_NAME_LEN]) -> (Pubkey, u8) {
+pub fn miner_pda(authority: Pubkey, name: [u8; NAME_LEN]) -> (Pubkey, u8) {
     Pubkey::find_program_address(&[MINER, authority.as_ref(), name.as_ref()], &crate::id())
 }
 
