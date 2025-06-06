@@ -1,14 +1,14 @@
+mod header;
+mod encoding;
+mod create;
 mod read;
 mod write;
+mod finalize;
 
+pub use header::*;
+pub use encoding::*;
+pub use create::*;
 pub use read::*;
 pub use write::*;
+pub use finalize::*;
 
-use num_enum::*;
-
-#[repr(u8)]
-#[derive(Clone, Copy, Debug, Eq, PartialEq, IntoPrimitive, TryFromPrimitive)]
-pub enum TapeLayout {
-    Raw        = 0,
-    Compressed = 1,
-}

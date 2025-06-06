@@ -188,13 +188,67 @@ fn create_and_verify_tape(
 ) {
     let payer_pk = payer.pubkey();
     let tape_name = format!("tape-name-{}", tape_idx);
-    let tape_header = [42; HEADER_SIZE]; // Can be anything
+    let tape_header = [42; HEADER_SIZE];
     let (tape_address, _tape_bump) = tape_pda(payer_pk, &to_name(&tape_name));
     let (writer_address, _writer_bump) = writer_pda(tape_address);
 
+    // Create tape and verify initial state
+    let mut stored_tape = create_tape(
+        svm, 
+        payer, 
+        &tape_name, 
+        tape_header, 
+        tape_address, 
+        writer_address
+    );
+
+    let tape_seed = &[stored_tape.account.merkle_seed.as_ref()];
+    let mut writer_tree = MerkleTree::<TREE_HEIGHT>::new(tape_seed);
+
+    write_tape(
+        svm,
+        payer,
+        tape_address,
+        writer_address,
+        &mut stored_tape,
+        &mut writer_tree,
+    );
+
+    update_tape(
+        svm,
+        payer,
+        tape_address,
+        writer_address,
+        &mut stored_tape,
+        &mut writer_tree,
+    );
+
+    finalize_tape(
+        svm,
+        payer,
+        tape_address,
+        writer_address,
+        &stored_tape,
+        tape_idx,
+    );
+
+    // Store the finalized tape for later
+    tape_db.push(stored_tape);
+}
+
+fn create_tape(
+    svm: &mut LiteSVM,
+    payer: &Keypair,
+    tape_name: &str,
+    tape_header: [u8; HEADER_SIZE],
+    tape_address: Pubkey,
+    writer_address: Pubkey,
+) -> StoredTape {
+    let payer_pk = payer.pubkey();
+
     // Create tape
     let blockhash = svm.latest_blockhash();
-    let ix = build_create_ix(payer_pk, &tape_name, Some(tape_header));
+    let ix = build_create_ix(payer_pk, tape_name, Some(tape_header));
     let tx = Transaction::new_signed_with_payer(&[ix], Some(&payer_pk), &[&payer], blockhash);
     let res = send_tx(svm, tx);
     assert!(res.is_ok());
@@ -203,28 +257,37 @@ fn create_and_verify_tape(
     let account = svm.get_account(&tape_address).unwrap();
     let tape = Tape::unpack(&account.data).unwrap();
     assert_eq!(tape.authority, payer_pk);
-    assert_eq!(tape.name, to_name(&tape_name));
+    assert_eq!(tape.name, to_name(tape_name));
     assert_eq!(tape.state, u64::from(TapeState::Created));
     assert_ne!(tape.merkle_seed, [0; 32]);
     assert_eq!(tape.merkle_root, [0; 32]);
     assert_eq!(tape.header, tape_header);
-    assert_eq!(tape.number, 0); // (tapes get a number when finalized)
+    assert_eq!(tape.number, 0);
 
     // Verify writer account
     let account = svm.get_account(&writer_address).unwrap();
     let writer = Writer::unpack(&account.data).unwrap();
     assert_eq!(writer.tape, tape_address);
 
-    let mut writer_tree = MerkleTree::new(&[tape.merkle_seed.as_ref()]);
+    let writer_tree = MerkleTree::<{TREE_HEIGHT}>::new(&[tape.merkle_seed.as_ref()]);
     assert_eq!(writer.state, writer_tree);
 
-    let mut stored_tape = StoredTape {
+    StoredTape {
         pubkey: tape_address,
         segments: vec![],
         account: *tape,
-    };
+    }
+}
 
-    // Write segments
+fn write_tape(
+    svm: &mut LiteSVM,
+    payer: &Keypair,
+    tape_address: Pubkey,
+    writer_address: Pubkey,
+    stored_tape: &mut StoredTape,
+    writer_tree: &mut MerkleTree::<{TREE_HEIGHT}>,
+) {
+    let payer_pk = payer.pubkey();
     let mut total_size = 0;
 
     for write_index in 0..10u64 {
@@ -234,7 +297,7 @@ fn create_and_verify_tape(
         let blockhash = svm.latest_blockhash();
         let ix = build_write_ix(payer_pk, tape_address, writer_address, &data);
         let tx = Transaction::new_signed_with_payer(&[ix], Some(&payer_pk), &[&payer], blockhash);
-        let res = send_tx(svm, tx.clone());
+        let res = send_tx(svm, tx);
         assert!(res.is_ok());
 
         let segments = data.chunks(SEGMENT_SIZE);
@@ -242,36 +305,46 @@ fn create_and_verify_tape(
             let canonical_segment = padded_array::<SEGMENT_SIZE>(segment);
 
             assert!(write_segment(
-                &mut writer_tree,
+                writer_tree,
                 (stored_tape.segments.len() + segment_number) as u64,
                 &canonical_segment,
             )
             .is_ok());
 
-            // Keep track of the segments written
             stored_tape.segments.push(canonical_segment.to_vec());
         }
 
         // Verify writer state
         let account = svm.get_account(&writer_address).unwrap();
         let writer = Writer::unpack(&account.data).unwrap();
-        assert_eq!(writer.state, writer_tree);
+        assert_eq!(writer.state.get_root(), writer_tree.get_root());
 
-        // Verify tape state
+        // Verify and update tape state
         let account = svm.get_account(&tape_address).unwrap();
         let tape = Tape::unpack(&account.data).unwrap();
         assert_eq!(tape.total_segments, stored_tape.segments.len() as u64);
         assert_eq!(tape.total_size, total_size);
         assert_eq!(tape.state, u64::from(TapeState::Writing));
         assert_eq!(tape.merkle_root, writer_tree.get_root().to_bytes());
-        assert_eq!(tape.header, tape_header);
-    }
+        assert_eq!(tape.header, stored_tape.account.header);
 
-    // Update a segment to ensure the update instruction works
-    // pick a segment to update (e.g., the first one)
+        // Update stored_tape.account
+        stored_tape.account = *tape;
+    }
+}
+
+fn update_tape(
+    svm: &mut LiteSVM,
+    payer: &Keypair,
+    tape_address: Pubkey,
+    writer_address: Pubkey,
+    stored_tape: &mut StoredTape,
+    writer_tree: &mut MerkleTree::<{TREE_HEIGHT}>,
+) {
+    let payer_pk = payer.pubkey();
     let target_segment: u64 = 0;
 
-    // reconstruct leaves for proof
+    // Reconstruct leaves for proof
     let mut leaves = Vec::new();
     for (segment_id, segment_data) in stored_tape.segments.iter().enumerate() {
         let data_array = padded_array::<SEGMENT_SIZE>(segment_data);
@@ -279,7 +352,7 @@ fn create_and_verify_tape(
         leaves.push(leaf);
     }
 
-    // compute Merkle proof for the target segment
+    // Compute Merkle proof
     let merkle_proof_vec = writer_tree.get_merkle_proof(&leaves, target_segment as usize);
     let merkle_proof: [[u8; 32]; PROOF_LEN] = merkle_proof_vec
         .iter()
@@ -288,17 +361,15 @@ fn create_and_verify_tape(
         .try_into()
         .unwrap();
 
-    // old_data is the current canonical segment
+    // Prepare data
     let old_data_array: [u8; SEGMENT_SIZE] = stored_tape.segments[target_segment as usize]
         .clone()
         .try_into()
         .unwrap();
-
-    // prepare new data for that segment
     let new_raw = b"<segment_0_updated>";
     let new_data_array = padded_array::<SEGMENT_SIZE>(new_raw);
 
-    // send the update transaction
+    // Send update transaction
     let blockhash = svm.latest_blockhash();
     let ix = build_update_ix(
         payer_pk,
@@ -313,41 +384,65 @@ fn create_and_verify_tape(
     let res = send_tx(svm, tx);
     assert!(res.is_ok());
 
-    // update the local tree to reflect the new leaf
+    // Update local tree
     assert!(update_segment(
-        &mut writer_tree, 
-        target_segment, 
+        writer_tree,
+        target_segment,
         &old_data_array,
         &new_data_array,
         &merkle_proof,
-    ).is_ok());
+    )
+    .is_ok());
 
-    // update stored_tape.segments to hold the new canonical data
+    // Update stored tape segments
     stored_tape.segments[target_segment as usize] = new_data_array.to_vec();
 
-    // Verify writer state after update
+    // Verify writer state
     let account = svm.get_account(&writer_address).unwrap();
     let writer = Writer::unpack(&account.data).unwrap();
-    assert_eq!(writer.state, writer_tree);
+    assert_eq!(writer.state, *writer_tree);
 
-    // Verify tape state after update
+    // Verify and update tape state
     let account = svm.get_account(&tape_address).unwrap();
     let tape = Tape::unpack(&account.data).unwrap();
     assert_eq!(tape.total_segments, 10);
-    assert_eq!(tape.total_size, total_size);
+    assert_eq!(tape.total_size, stored_tape.account.total_size);
     assert_eq!(tape.state, u64::from(TapeState::Writing));
     assert_eq!(tape.merkle_root, writer_tree.get_root().to_bytes());
-    assert_eq!(tape.header, tape_header);
+    assert_eq!(tape.header, stored_tape.account.header);
+
+    // Update stored_tape.account
+    stored_tape.account = *tape;
+}
+
+fn finalize_tape(
+    svm: &mut LiteSVM,
+    payer: &Keypair,
+    tape_address: Pubkey,
+    writer_address: Pubkey,
+    stored_tape: &StoredTape,
+    tape_idx: u64,
+) {
+    let payer_pk = payer.pubkey();
 
     // Finalize tape
     let blockhash = svm.latest_blockhash();
     let ix = build_finalize_ix(payer_pk, tape_address, writer_address, None);
     let tx = Transaction::new_signed_with_payer(&[ix], Some(&payer_pk), &[&payer], blockhash);
-    let res = send_tx(svm, tx.clone());
+    let res = send_tx(svm, tx);
     assert!(res.is_ok());
 
-    // Try another update, it should fail this time
-    // reuse the same old_data/new_data and proof (proof is now stale but the tx should be rejected due to finalized state)
+    // Verify update fails after finalization
+    let target_segment: u64 = 0;
+    let old_data_array: [u8; SEGMENT_SIZE] = stored_tape.segments[target_segment as usize]
+        .clone()
+        .try_into()
+        .unwrap();
+
+    let new_raw = b"<segment_0_updated>";
+    let new_data_array = padded_array::<SEGMENT_SIZE>(new_raw);
+    let merkle_proof = [[0u8; 32]; PROOF_LEN]; // Stale proof, but should fail due to state
+
     let blockhash = svm.latest_blockhash();
     let ix = build_update_ix(
         payer_pk,
@@ -368,15 +463,12 @@ fn create_and_verify_tape(
     assert_eq!(tape.state, u64::from(TapeState::Finalized));
     assert_eq!(tape.number, tape_idx + 1);
     assert_eq!(tape.total_segments, 10);
-    assert_eq!(tape.total_size, total_size);
-    assert_eq!(tape.merkle_root, writer_tree.get_root().to_bytes());
+    assert_eq!(tape.total_size, stored_tape.account.total_size);
+    assert_eq!(tape.merkle_root, stored_tape.account.merkle_root);
 
     // Verify writer account is closed
     let account = svm.get_account(&writer_address).unwrap();
     assert!(account.data.is_empty());
-
-    stored_tape.account = *tape;
-    tape_db.push(stored_tape);
 }
 
 fn advance_epoch(svm: &mut LiteSVM, payer: &Keypair, time_offset: i64) {

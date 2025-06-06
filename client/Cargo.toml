@@ -16,6 +16,7 @@ tape-api.workspace = true
 steel.workspace = true
 crankx.workspace = true
 
+bytemuck.workspace = true
 anyhow.workspace = true
 base64.workspace = true
 bincode.workspace = true

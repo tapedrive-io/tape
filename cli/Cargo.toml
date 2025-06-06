@@ -32,5 +32,8 @@ reqwest = { workspace = true, features = ["default"] }
 indicatif.workspace = true
 console.workspace = true
 
+mime.workspace = true
+mime_guess.workspace = true
+
 solana-client.workspace = true
 solana-sdk.workspace = true

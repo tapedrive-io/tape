@@ -5,6 +5,7 @@ use crate::cli::{Cli, Commands};
 use crate::log;
 use tape_client as tapedrive;
 use tape_api::utils::from_name;
+use tape_client::TapeHeader;
 
 pub async fn handle_misc_commands(cli: Cli, client: RpcClient) -> Result<()> {
     match cli.command {
@@ -46,6 +47,8 @@ pub async fn handle_misc_commands(cli: Cli, client: RpcClient) -> Result<()> {
         Commands::GetTape { pubkey } => {
             let tape_address: Pubkey = pubkey.parse()?;
             let (tape, _) = tapedrive::get_tape_account(&client, &tape_address).await?;
+            let header = TapeHeader::try_from_bytes(&tape.header)?;
+
             log::print_section_header("Tape Account");
             log::print_message(&format!("Id: {}", tape.number));
             log::print_message(&format!("Name: {}", from_name(&tape.name)));
@@ -54,6 +57,7 @@ pub async fn handle_misc_commands(cli: Cli, client: RpcClient) -> Result<()> {
             log::print_message(&format!("Total Segments: {}", tape.total_segments));
             log::print_message(&format!("Total Size: {} bytes", tape.total_size));
             log::print_message(&format!("State: {}", tape.state));
+            log::print_message(&format!("{:?}", header));
             log::print_divider();
         }
         Commands::GetMiner { pubkey } => {

@@ -18,7 +18,7 @@ pub struct Cli {
     #[arg(
         short = 'u', 
         long = "cluster", 
-        default_value = "d", 
+        default_value = "l", 
         global = true,
         help = "Cluster to use: l (localnet), m (mainnet), d (devnet), t (testnet),\n or a custom RPC URL"
     )]
@@ -47,18 +47,10 @@ pub enum Commands {
         #[arg(short = 'r', long = "remote", conflicts_with_all = ["filename", "message"])]
         remote: Option<String>,
 
-        #[arg(short = 'y', long = "yes", help = "Assume yes to all prompts")]
-        assume_yes: bool,
-
         #[arg(short = 'n', long = "tape-name", help = "Custom name for the tape (defaults to timestamp)")]
         tape_name: Option<String>,
-
-        #[arg(long = "no-verify", help = "Skip verification of the tape")]
-        no_verify: bool,
-
-        #[arg(long = "raw", help = "Write raw data without compression", default_value_t = false)]
-        raw: bool,
     },
+
     Read {
         #[arg(help = "Tape account to read")]
         tape: String,
