@@ -48,7 +48,12 @@ Beyond reading and writing, users can participate in the tape network. There are
 
 <img width="958" alt="image" src="https://github.com/user-attachments/assets/edd81c05-9a23-4d04-9433-602053ed12d5" />
 
-> We have an easy install script for running a node, learn more [here](https://github.com/tapedrive-io/deploy).
+## Want to run a node?
+
+At minimum, each node must run the [archive](#archiving), but from there you can choose to run the [web](#web) service or just [mine](#mining). See the sections below.
+
+> [!Important]
+> We have an easy install script for running a **full node**, learn more [here](https://github.com/tapedrive-io/deploy).
 
 
 ## Archiving
