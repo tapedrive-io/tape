@@ -13,7 +13,7 @@ TAPEDRIVE makes it easy to read and write data on Solana. It's over 1,400x cheap
 
 ## Quick Start
 
-You can install the CLI using Cargo:
+You can build the CLI using Cargo:
 
 ```bash
 cargo install tapedrive-cli
@@ -32,6 +32,14 @@ tapedrive write -m "hello, world"
 #### Read
 ```
 tapedrive read <id>
+```
+
+## Install Latest
+
+We have an easy installer if you prefer not to build from source (**recommended**):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/spool-labs/deploy/refs/heads/main/scripts/install.sh | bash
 ```
 
 ## How It Works
