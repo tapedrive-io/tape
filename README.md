@@ -6,11 +6,10 @@
 ![image](https://github.com/user-attachments/assets/bf674eb1-512d-47e7-a9c5-e0d0e44c6edb)
 
 
-TAPEDRIVE makes it easy to read and write data on Solana. It's over 1,400x cheaper than using an account. It works by compressing your data into tiny on-chain proofs. A network of miners then solve challenges in parallel to secure your data. It's entirely on Solana, so there's no need for side-chains or consensus overhead. The network rewards miners with the TAPE token, capped at 7 million (decaying ~15 % per year) and aligns incentives for long-term growth.
-
+TAPEDRIVE makes it easy to read and write data on Solana. It's over 1,400x cheaper than using an account. It works by compressing your data into tiny on-chain proofs. A network of miners then solve challenges in parallel to secure your data. It's entirely on Solana, so there's no need for side-chains or consensus overhead.
 
 > [!Important]
-> The program is deployed on the Solana `devnet`, but **not** on `mainnet` yet. An audit is needed before we roll it out. Stay tuned for updates!
+> The program is deployed on the Solana `devnet`, but **not** on `mainnet` yet.
 
 ## Quick Start
 
