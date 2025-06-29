@@ -1,7 +1,7 @@
 # TAPEDRIVE
 [![crates.io](https://img.shields.io/crates/v/tapedrive-cli.svg?style=flat)](https://crates.io/crates/tapedrive-cli)
 
-**Your data, permanently recorded** — uncensorable, uneditable, and here for good.
+**Your data, permanently recorded** — uncensorable, ~~un~~editable (if you want), and here for good.
 
 ![image](https://github.com/user-attachments/assets/bf674eb1-512d-47e7-a9c5-e0d0e44c6edb)
 
