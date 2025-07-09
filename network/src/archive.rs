@@ -20,7 +20,9 @@ pub async fn archive_loop(
 ) -> Result<()> {
     // If a trusted peer is provided, sync with it first
     if let Some(peer_url) = trusted_peer.clone() {
+        println!("DEBUG: Using trusted peer: {}", peer_url);
         println!("DEBUG: Syncing with trusted peer");
+        println!("DEBUG: This may take a while... please be patient");
         sync_with_trusted_peer(store, client, &peer_url).await?;
     }
 
@@ -159,7 +161,7 @@ async fn sync_with_trusted_peer(
             .send().await?
             .json::<serde_json::Value>().await?;
 
-        //println!("DEBUG: getTape response: {:?}", seg_resp);
+        println!("DEBUG: Syncing tape {}, address {}", tape_number, tape_address);
 
         let segments = seg_resp["result"].as_array()
             .ok_or_else(|| anyhow!("Invalid getTape response: {:?}", seg_resp))?;
