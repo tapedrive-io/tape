@@ -10,7 +10,7 @@ use solana_sdk::commitment_config::CommitmentConfig;
 
 use cli::{Cli, Commands};
 use keypair::{ get_payer, get_keypair_path };
-use commands::{admin, read, write, misc, network};
+use commands::{admin, read, write, misc, network, claim};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -55,6 +55,13 @@ async fn main() -> Result<()> {
         Commands::Write { .. } => {
             let payer = get_payer(keypair_path)?;
             write::handle_write_command(cli, rpc_client, payer).await?;
+        }
+
+        // Miner Commands
+
+        Commands::Claim { .. } => {
+            let payer = get_payer(keypair_path)?;
+            claim::handle_claim_command(cli, rpc_client, payer).await?;
         }
 
         // Network Commands

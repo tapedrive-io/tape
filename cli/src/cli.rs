@@ -67,6 +67,16 @@ pub enum Commands {
         output: Option<String>,
     },
 
+    // Miner Commands
+
+    Claim {
+        #[arg(help = "Miner account public key")]
+        miner: String,
+
+        #[arg(help = "Amount of tokens to claim")]
+        amount: u64,
+    },
+
     // Network Commands
 
     Archive {

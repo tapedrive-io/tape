@@ -28,6 +28,9 @@ serde_json.workspace = true
 sha3.workspace = true
 tokio.workspace = true
 
+spl-token.workspace = true
+spl-associated-token-account.workspace = true
+
 solana-client.workspace = true
 solana-sdk.workspace = true
 solana-transaction-status.workspace = true
