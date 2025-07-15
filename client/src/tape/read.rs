@@ -33,24 +33,3 @@ pub async fn read_from_tape(
         _ => Err(anyhow!("Unexpected instruction type: {:?}", ix_type)),
     }
 }
-
-pub async fn read_linked_chunk(
-    client: &RpcClient,
-    signature: &Signature,
-) -> Result<(Vec<u8>, Signature)> {
-    let data = read_from_tape(
-        client,
-        signature,
-    ).await?;
-
-    if data.len() < 64 {
-        return Err(anyhow!("Data is too short to contain a valid linked chunk"));
-    }
-
-    let prev_chunk : [u8; 64] = data[..64].try_into()?;
-    let prev_sig = Signature::from(prev_chunk);
-    let chunk = data[64..].to_vec();
-
-    Ok((chunk, prev_sig))
-}
-
