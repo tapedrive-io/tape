@@ -6,7 +6,6 @@ use rand::Rng;
 use solana_sdk::{
     signer::Signer,
     transaction::Transaction,
-    clock::Clock,
     pubkey::Pubkey,
     signature::Keypair
 };
@@ -104,14 +103,12 @@ fn run_integration() {
         merkle_proof,
     );
 
-    //
-    // // Print final state
-    // let account = svm.get_account(&miner_address).unwrap();
-    // let miner = Miner::unpack(&account.data).unwrap();
-    //
-    // println!("miner.balance: {:?}", miner.unclaimed_rewards);
-    // println!("next recall: {:?}", miner.recall_tape);
-    // println!("next challenge: {:?}", miner.current_challenge);
+    // Print final state
+    let account = svm.get_account(&miner_address).unwrap();
+    let miner = Miner::unpack(&account.data).unwrap();
+
+    println!("miner.balance: {:?}", miner.unclaimed_rewards);
+    println!("next challenge: {:?}", miner.challenge);
 }
 
 fn setup_environment() -> (LiteSVM, Keypair) {
@@ -144,7 +141,7 @@ fn verify_epoch_account(svm: &LiteSVM) {
         .get_account(&epoch_address)
         .expect("Epoch account should exist");
     let epoch = Epoch::unpack(&account.data).expect("Failed to unpack Epoch account");
-    assert_eq!(epoch.number, 0);
+    assert_eq!(epoch.number, 1);
     assert_eq!(epoch.progress, 0);
     assert_eq!(epoch.target_difficulty, MIN_DIFFICULTY);
     assert_eq!(epoch.target_participation, MIN_PARTICIPATION_TARGET);
@@ -159,7 +156,7 @@ fn verify_block_account(svm: &LiteSVM,) {
         .get_account(&block_address)
         .expect("Block account should exist");
     let block = Block::unpack(&account.data).expect("Failed to unpack Block account");
-    assert_eq!(block.number, 0);
+    assert_eq!(block.number, 1);
     assert_eq!(block.progress, 0);
     assert_eq!(block.last_proof_at, 0);
     assert_eq!(block.last_block_at, 0);

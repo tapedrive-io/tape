@@ -60,7 +60,16 @@ pub fn process_mine(accounts: &[AccountInfo], data: &[u8]) -> ProgramResult {
         TapeError::SolutionTooEasy,
     )?;
 
-    // TODO: check that the miner is actually able to submit now, check if the block has stalled.
+    // Check if we should allow duplicate solutions 
+    // (same miner submitting multiple times in a block).
+
+    if miner.last_proof_block == block.number {
+        if has_stalled(block, current_time) {
+            epoch.duplicates = epoch.duplicates.saturating_add(1);
+        } else {
+            return Err(TapeError::SolutionInvalid.into());
+        }
+    }
 
     let miner_challenge = compute_challenge(
         &block.challenge,
@@ -72,32 +81,16 @@ pub fn process_mine(accounts: &[AccountInfo], data: &[u8]) -> ProgramResult {
         archive.tapes_stored // TODO: might need to cache this on the miner to avoid snipping
     );
 
-    solana_program::msg!(
-        "Recall tape: {}\n, computed challenge: {:?}\n, miner.challenge: {:?}\n, block.challenge: {:?}",
-        recall_tape,
-        miner_challenge,
-        miner.challenge,
-        block.challenge
-    );
-
-    solana_program::msg!(
-        "tape.number: {}",
-        tape.number
-    );
-
     check_condition(
         tape.number == recall_tape,
         TapeError::SolutionInvalid,
     )?;
-
-    solana_program::msg!("2");
 
     let segment_number = compute_recall_segment(
         &miner_challenge, 
         tape.total_segments
     );
 
-    solana_program::msg!("3");
     // Validate that the miner actually has the data for the tape
 
     let merkle_root = tape.merkle_root;
@@ -107,9 +100,6 @@ pub fn process_mine(accounts: &[AccountInfo], data: &[u8]) -> ProgramResult {
         args.recall_segment.as_ref(),
     ]);
 
-    solana_program::msg!("recall segment: {}", segment_number);
-
-    solana_program::msg!("4");
     assert!(merkle_proof.len() == PROOF_LEN as usize);
 
     check_condition(
@@ -121,28 +111,19 @@ pub fn process_mine(accounts: &[AccountInfo], data: &[u8]) -> ProgramResult {
         TapeError::SolutionInvalid,
     )?;
 
-    solana_program::msg!("5");
-
     // Verify that the PoW solution is good
     check_condition(
         solution.is_valid(&miner_challenge, &args.recall_segment).is_ok(),
         TapeError::SolutionInvalid,
     )?;
 
-    solana_program::msg!("6");
-
     // Update miner multiplier
     update_miner_multiplier(miner, block);
-
-    solana_program::msg!("epoch.reward_rate: {}", epoch.reward_rate);
-    solana_program::msg!("miner.multiplier: {}", miner.multiplier);
 
     let final_reward = get_scaled_reward(
         epoch.reward_rate,
         miner.multiplier
     );
-
-    solana_program::msg!("final_reward: {}", final_reward);
 
     let next_miner_challenge = compute_next_challenge(
         &miner.challenge,
@@ -187,6 +168,12 @@ pub fn process_mine(accounts: &[AccountInfo], data: &[u8]) -> ProgramResult {
     }
 
     Ok(())
+}
+
+// Helper: Check if the block has stalled, meaning no solutions have been submitted for a while.
+fn has_stalled(block: &Block, current_time: i64) -> bool {
+    current_time > block.last_proof_at
+        .saturating_add(BLOCK_DURATION_SECONDS as i64)
 }
 
 // Helper: Update miner multiplier based on timing of this solution.
