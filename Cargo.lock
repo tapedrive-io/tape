@@ -6403,7 +6403,7 @@ dependencies = [
  "solana-sdk",
  "solana-transaction-status",
  "solana-transaction-status-client-types",
- "spl-associated-token-account",
+ "spl-associated-token-account 6.0.0",
  "spl-token 4.0.2",
  "steel",
  "tape-api",
