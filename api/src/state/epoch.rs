@@ -9,7 +9,7 @@ pub struct Epoch {
     pub progress: u64,
 
     pub target_difficulty: u64,
-    pub target_unique: u64,
+    pub target_participation: u64,
     pub reward_rate: u64,
     pub duplicates: u64,
 

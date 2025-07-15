@@ -3,12 +3,6 @@ use solana_program::program_pack::Pack;
 use spl_token::state::Mint;
 use steel::*;
 
-use crate::miner::compute_challenge;
-
-const INITIAL_UNIQUE: u64        = 1;
-const INITIAL_DIFFICULTY: u64    = 7;
-const INITIAL_REWARD_RATE: u64   = 1;
-
 pub fn process_initialize(accounts: &[AccountInfo<'_>], _data: &[u8]) -> ProgramResult {
     let [
         signer_info, 
@@ -99,8 +93,8 @@ pub fn process_initialize(accounts: &[AccountInfo<'_>], _data: &[u8]) -> Program
 
     epoch.number               = 0;
     epoch.progress             = 0;
-    epoch.target_unique        = INITIAL_UNIQUE;
-    epoch.target_difficulty    = INITIAL_DIFFICULTY;
+    epoch.target_participation = MIN_PARTICIPATION_TARGET;
+    epoch.target_difficulty    = MIN_DIFFICULTY;
     epoch.reward_rate          = INITIAL_REWARD_RATE;
     epoch.duplicates           = 0;
     epoch.last_epoch_at        = 0;
@@ -121,7 +115,7 @@ pub fn process_initialize(accounts: &[AccountInfo<'_>], _data: &[u8]) -> Program
     block.last_proof_at     = 0;
     block.last_block_at     = 0;
 
-    let next_challenge = compute_challenge(
+    let next_challenge = compute_next_challenge(
         &block.challenge,
         slot_hashes_info
     );
