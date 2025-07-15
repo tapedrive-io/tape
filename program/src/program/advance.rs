@@ -8,10 +8,6 @@ pub fn process_advance(accounts: &[AccountInfo<'_>], _data: &[u8]) -> ProgramRes
         archive_info,
         epoch_info, 
         block_info,
-        mint_info, 
-        treasury_info, 
-        treasury_ata_info, 
-        token_program_info
     ] = accounts else {
         return Err(ProgramError::NotEnoughAccountKeys);
     };
@@ -30,44 +26,17 @@ pub fn process_advance(accounts: &[AccountInfo<'_>], _data: &[u8]) -> ProgramRes
         .is_epoch()?
         .as_account_mut::<Block>(&tape_api::ID)?;
 
-    let mint = mint_info
-        .has_address(&MINT_ADDRESS)?
-        .is_writable()?
-        .as_mint()?;
-
-    treasury_info.is_treasury()?.is_writable()?;
-    treasury_ata_info.is_treasury_ata()?.is_writable()?;
-    token_program_info.is_program(&spl_token::ID)?;
-
     if epoch.progress < EPOCH_BLOCKS {
         advance_epoch(epoch, current_time)?;
 
-        let mint_supply    = mint.supply();
         let storage_rate   = get_storage_rate(archive.bytes_stored);
-        let inflation_rate = get_inflation_rate(mint_supply);
+        let inflation_rate = get_inflation_rate(epoch.number);
 
-        // Add inflation to the treasury if it doesn't exceed the max supply
-        if mint_supply.saturating_add(inflation_rate) < MAX_SUPPLY {
-            mint_to_signed(
-                mint_info,
-                treasury_ata_info,
-                treasury_info,
-                token_program_info,
-                inflation_rate,
-                &[TREASURY],
-            )?;
-
-            epoch.reward_rate = storage_rate
-                .saturating_add(inflation_rate);
-        } else {
-            epoch.reward_rate = storage_rate;
-        }
-
+        epoch.reward_rate = storage_rate
+            .saturating_add(inflation_rate);
     } else {
         epoch.progress = epoch.progress.saturating_add(1);
     }
-
-
 
 
     Ok(())
@@ -103,7 +72,7 @@ fn advance_epoch(
 #[inline(always)]
 fn adjust_difficulty(epoch: &mut Epoch, current_time: i64) {
 
-    let elapsed_time = current_time - epoch.last_epoch_at;
+    let elapsed_time = current_time.saturating_sub(epoch.last_epoch_at);
     let average_time_per_block = elapsed_time / EPOCH_BLOCKS as i64;
 
     // If blocks were solved faster than 1 minute, increase difficulty
@@ -140,29 +109,6 @@ fn adjust_participation(epoch: &mut Epoch) {
             .saturating_sub(1);
     }
 }
-
-
-/// Every epoch, the protocol adjusts the reward rate for miners based on how many bytes are
-/// currently stored in the archive.
-///
-/// The reward rate is calculated such that each block is worth 1 minute of a 100 year time
-/// horizon. Additionally, we define the write cost to be 1 tape per megabyte stored.
-#[inline(always)]
-fn adjust_reward_rate(archive: &mut Archive, epoch: &Epoch) {
-    // If the archive is empty, no rewards are available
-    if archive.bytes_stored == 0 {
-        return;
-    }
-
-
-    // Calculate the reward rate based on the total bytes stored in the archive
-
-
-
-    // Update the archive's reward rate
-    archive.reward_rate = reward_rate;
-}
-
 
 /// Pre-computed archive reward rate based on current bytes stored. This is calculated such that
 /// each block is worth 1 minute of a 100 year time horizon, with the write cost being
@@ -203,36 +149,37 @@ pub fn get_storage_rate(archive_byte_size: u64) -> u64 {
     }
 }
 
-/// Pre-computed inflation rate based on current supply. Decay of ~15% every 12 months with a target
-/// of 2.1 million TAPE worth of total inflation over 25 years. After which, the archive storage
-/// fees would take over, with no further inflation.
+/// Pre-computed inflation rate based on current epoch number. Decay of ~15% every 12 months with a
+/// target of 2.1 million TAPE worth of total inflation over 25 years. After which, the archive
+/// storage fees would take over, with no further inflation.
 #[inline(always)]
-pub fn get_inflation_rate(current_supply: u64) -> u64 {
-    match current_supply {
-        n if n < ONE_TAPE * 525600 => 10000000000, // Year ~1,  about 1.00 TAPE/min
-        n if n < ONE_TAPE * 919800 => 7500000000,  // Year ~2,  about 0.75 TAPE/min
-        n if n < ONE_TAPE * 1215450 => 5625000000, // Year ~3,  about 0.56 TAPE/min
-        n if n < ONE_TAPE * 1437187 => 4218750000, // Year ~4,  about 0.42 TAPE/min
-        n if n < ONE_TAPE * 1603490 => 3164062500, // Year ~5,  about 0.32 TAPE/min
-        n if n < ONE_TAPE * 1728217 => 2373046875, // Year ~6,  about 0.24 TAPE/min
-        n if n < ONE_TAPE * 1821763 => 1779785156, // Year ~7,  about 0.18 TAPE/min
-        n if n < ONE_TAPE * 1891922 => 1334838867, // Year ~8,  about 0.13 TAPE/min
-        n if n < ONE_TAPE * 1944541 => 1001129150, // Year ~9,  about 0.10 TAPE/min
-        n if n < ONE_TAPE * 1984006 => 750846862,  // Year ~10, about 0.08 TAPE/min
-        n if n < ONE_TAPE * 2013604 => 563135147,  // Year ~11, about 0.06 TAPE/min
-        n if n < ONE_TAPE * 2035803 => 422351360,  // Year ~12, about 0.04 TAPE/min
-        n if n < ONE_TAPE * 2052452 => 316763520,  // Year ~13, about 0.03 TAPE/min
-        n if n < ONE_TAPE * 2064939 => 237572640,  // Year ~14, about 0.02 TAPE/min
-        n if n < ONE_TAPE * 2074304 => 178179480,  // Year ~15, about 0.02 TAPE/min
-        n if n < ONE_TAPE * 2081328 => 133634610,  // Year ~16, about 0.01 TAPE/min
-        n if n < ONE_TAPE * 2086596 => 100225957,  // Year ~17, about 0.01 TAPE/min
-        n if n < ONE_TAPE * 2090547 => 75169468,   // Year ~18, about 0.01 TAPE/min
-        n if n < ONE_TAPE * 2093510 => 56377101,   // Year ~19, about 0.01 TAPE/min
-        n if n < ONE_TAPE * 2095732 => 42282825,   // Year ~20, about 0.00 TAPE/min
-        n if n < ONE_TAPE * 2097399 => 31712119,   // Year ~21, about 0.00 TAPE/min
-        n if n < ONE_TAPE * 2098649 => 23784089,   // Year ~22, about 0.00 TAPE/min
-        n if n < ONE_TAPE * 2099587 => 17838067,   // Year ~23, about 0.00 TAPE/min
-        n if n < ONE_TAPE * 2100000 => 13378550,   // Year ~24, about 0.00 TAPE/min
+pub fn get_inflation_rate(current_epoch: u64) -> u64 {
+    match current_epoch {
+        n if n < 1 * EPOCHS_PER_YEAR   => 10000000000, // Year ~1,  about 1.00 TAPE/min
+        n if n < 2 * EPOCHS_PER_YEAR   => 7500000000,  // Year ~2,  about 0.75 TAPE/min
+        n if n < 3 * EPOCHS_PER_YEAR   => 5625000000,  // Year ~3,  about 0.56 TAPE/min
+        n if n < 4 * EPOCHS_PER_YEAR   => 4218750000,  // Year ~4,  about 0.42 TAPE/min
+        n if n < 5 * EPOCHS_PER_YEAR   => 3164062500,  // Year ~5,  about 0.32 TAPE/min
+        n if n < 6 * EPOCHS_PER_YEAR   => 2373046875,  // Year ~6,  about 0.24 TAPE/min
+        n if n < 7 * EPOCHS_PER_YEAR   => 1779785156,  // Year ~7,  about 0.18 TAPE/min
+        n if n < 8 * EPOCHS_PER_YEAR   => 1334838867,  // Year ~8,  about 0.13 TAPE/min
+        n if n < 9 * EPOCHS_PER_YEAR   => 1001129150,  // Year ~9,  about 0.10 TAPE/min
+        n if n < 10 * EPOCHS_PER_YEAR  => 750846862,   // Year ~10, about 0.08 TAPE/min
+        n if n < 11 * EPOCHS_PER_YEAR  => 563135147,   // Year ~11, about 0.06 TAPE/min
+        n if n < 12 * EPOCHS_PER_YEAR  => 422351360,   // Year ~12, about 0.04 TAPE/min
+        n if n < 13 * EPOCHS_PER_YEAR  => 316763520,   // Year ~13, about 0.03 TAPE/min
+        n if n < 14 * EPOCHS_PER_YEAR  => 237572640,   // Year ~14, about 0.02 TAPE/min
+        n if n < 15 * EPOCHS_PER_YEAR  => 178179480,   // Year ~15, about 0.02 TAPE/min
+        n if n < 16 * EPOCHS_PER_YEAR  => 133634610,   // Year ~16, about 0.01 TAPE/min
+        n if n < 17 * EPOCHS_PER_YEAR  => 100225957,   // Year ~17, about 0.01 TAPE/min
+        n if n < 18 * EPOCHS_PER_YEAR  => 75169468,    // Year ~18, about 0.01 TAPE/min
+        n if n < 19 * EPOCHS_PER_YEAR  => 56377101,    // Year ~19, about 0.01 TAPE/min
+        n if n < 20 * EPOCHS_PER_YEAR  => 42282825,    // Year ~20, about 0.00 TAPE/min
+        n if n < 21 * EPOCHS_PER_YEAR  => 31712119,    // Year ~21, about 0.00 TAPE/min
+        n if n < 22 * EPOCHS_PER_YEAR  => 23784089,    // Year ~22, about 0.00 TAPE/min
+        n if n < 23 * EPOCHS_PER_YEAR  => 17838067,    // Year ~23, about 0.00 TAPE/min
+        n if n < 24 * EPOCHS_PER_YEAR  => 13378550,    // Year ~24, about 0.00 TAPE/min
+        n if n < 25 * EPOCHS_PER_YEAR  => 10033913,    // Year ~25, about 0.00 TAPE/min
         _ => 0,
     }
 }

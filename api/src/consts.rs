@@ -47,6 +47,8 @@ pub const BYTES_PER_TAPE: u64              = BYTES_PER_MIB;
 
 pub const BLOCK_DURATION_SECONDS: u64      = ONE_MINUTE;
 pub const EPOCH_BLOCKS: u64                = 10;
+pub const EPOCHS_PER_YEAR: u64             = DAYS_PER_YEAR * HOURS_PER_DAY * MINUTES_PER_HOUR / 
+                                            (BLOCK_DURATION_SECONDS / ONE_MINUTE) / EPOCH_BLOCKS;
 
 // -- Const Addresses --
 // (There isn't a better way to do this yet; maybe a build.rs + include)

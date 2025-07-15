@@ -99,7 +99,7 @@ pub fn process_initialize(accounts: &[AccountInfo<'_>], _data: &[u8]) -> Program
 
     epoch.number               = 0;
     epoch.progress             = 0;
-    epoch.target_unique        = INITIAL_PARTICIPANTS;
+    epoch.target_unique        = INITIAL_UNIQUE;
     epoch.target_difficulty    = INITIAL_DIFFICULTY;
     epoch.reward_rate          = INITIAL_REWARD_RATE;
     epoch.duplicates           = 0;
