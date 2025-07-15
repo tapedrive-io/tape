@@ -121,6 +121,7 @@ pub fn process_initialize(accounts: &[AccountInfo<'_>], _data: &[u8]) -> Program
     );
 
     block.challenge = next_challenge;
+    block.challenge_set = 1;
 
     // Initialize archive.
     create_program_account::<Archive>(

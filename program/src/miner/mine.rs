@@ -78,7 +78,7 @@ pub fn process_mine(accounts: &[AccountInfo], data: &[u8]) -> ProgramResult {
 
     let recall_tape = compute_recall_tape(
         &miner_challenge,
-        archive.tapes_stored // TODO: might need to cache this on the miner to avoid snipping
+        block.challenge_set,
     );
 
     check_condition(
@@ -148,6 +148,7 @@ pub fn process_mine(accounts: &[AccountInfo], data: &[u8]) -> ProgramResult {
         );
 
         block.challenge = next_block_challenge;
+        block.challenge_set = archive.tapes_stored;
     }
 
     // Check if we need to advance the epoch

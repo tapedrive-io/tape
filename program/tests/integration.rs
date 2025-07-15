@@ -62,10 +62,6 @@ fn run_integration() {
     let miner_account = svm.get_account(&miner_address).unwrap();
     let miner = Miner::unpack(&miner_account.data).unwrap();
 
-    let (archive_address, _archive_bump) = archive_pda();
-    let archive_account = svm.get_account(&archive_address).unwrap();
-    let archive = Archive::unpack(&archive_account.data).unwrap();
-
     let (epoch_address, _epoch_bump) = epoch_pda();
     let epoch_account = svm.get_account(&epoch_address).unwrap();
     let epoch = Epoch::unpack(&epoch_account.data).unwrap();
@@ -81,7 +77,7 @@ fn run_integration() {
 
     let recall_tape = compute_recall_tape(
         &miner_challenge,
-        archive.tapes_stored
+        block.challenge_set
     );
 
     println!("Recall tape: {}", recall_tape);
@@ -160,6 +156,7 @@ fn verify_block_account(svm: &LiteSVM,) {
     assert_eq!(block.progress, 0);
     assert_eq!(block.last_proof_at, 0);
     assert_eq!(block.last_block_at, 0);
+    assert_eq!(block.challenge_set, 1);
     assert!(block.challenge.ne(&[0u8; 32]));
 }
 
