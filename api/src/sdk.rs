@@ -238,21 +238,3 @@ pub fn build_initialize_ix(
         data: Initialize {}.to_bytes(),
     }
 }
-
-pub fn build_advance_ix(
-    signer: Pubkey
-) -> Instruction {
-    Instruction {
-        program_id: crate::ID,
-        accounts: vec![
-            AccountMeta::new(signer, true),
-            AccountMeta::new(EPOCH_ADDRESS, false),
-            AccountMeta::new(BLOCK_ADDRESS, false),
-            AccountMeta::new(MINT_ADDRESS, false),
-            AccountMeta::new(TREASURY_ADDRESS, false),
-            AccountMeta::new(TREASURY_ATA, false),
-            AccountMeta::new_readonly(spl_token::ID, false),
-        ],
-        data: Advance {}.to_bytes(),
-    }
-}
