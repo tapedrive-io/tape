@@ -54,6 +54,7 @@ pub struct Write {
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub struct Update {
     pub segment_number: [u8; 8],
+    pub segment_slot: [u8; 8],
     pub old_data: [u8; SEGMENT_SIZE],
     pub new_data: [u8; SEGMENT_SIZE],
     pub proof: [[u8; 32]; PROOF_LEN],
@@ -80,6 +81,7 @@ pub struct Close {}
 pub struct Mine {
     pub digest: [u8; 16],
     pub nonce: [u8; 8],
+    pub recall_slot: [u8; 8],
     pub recall_segment: [u8; SEGMENT_SIZE],
     pub recall_proof: [[u8; 32]; PROOF_LEN],
 }

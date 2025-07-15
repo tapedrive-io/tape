@@ -62,12 +62,14 @@ pub fn build_update_ix(
     tape: Pubkey,
     writer: Pubkey,
     segment_number: u64,
+    segment_slot: u64,
     old_data: [u8; SEGMENT_SIZE],
     new_data: [u8; SEGMENT_SIZE],
     proof: [[u8;32]; PROOF_LEN],
 ) -> Instruction {
 
     let segment_number = segment_number.to_le_bytes();
+    let segment_slot = segment_slot.to_le_bytes();
 
     Instruction {
         program_id: crate::ID,
@@ -78,6 +80,7 @@ pub fn build_update_ix(
         ],
         data: Update {
             segment_number,
+            segment_slot,
             old_data,
             new_data,
             proof,
@@ -136,9 +139,12 @@ pub fn build_mine_ix(
     miner: Pubkey,
     tape: Pubkey,
     solution: Solution,
+    recall_slot: u64,
     recall_segment: [u8; SEGMENT_SIZE],
     recall_proof: [[u8;32]; PROOF_LEN],
 ) -> Instruction {
+    let recall_slot = recall_slot.to_le_bytes();
+
     Instruction {
         program_id: crate::ID,
         accounts: vec![
@@ -153,6 +159,7 @@ pub fn build_mine_ix(
         data: Mine {
             digest: solution.d,
             nonce: solution.n,
+            recall_slot,
             recall_segment,
             recall_proof,
         }.to_bytes(),

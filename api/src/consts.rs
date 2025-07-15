@@ -35,7 +35,7 @@ pub const ONE_MINUTE: u64                  = 60 * ONE_SECOND;
 
 pub const MINUTES_PER_HOUR: u64            = 60;
 pub const HOURS_PER_DAY: u64               = 24;
-pub const DAYS_PER_YEAR: u64               = 365; // avoiding leap years for simplicity
+pub const DAYS_PER_YEAR: u64               = 365;
 pub const TIME_HORIZON_YEARS: u64          = 100;
 pub const TIME_HORIZON_MINUTES: u64        = TIME_HORIZON_YEARS * (DAYS_PER_YEAR * HOURS_PER_DAY * MINUTES_PER_HOUR);
 
@@ -50,7 +50,7 @@ pub const EPOCH_BLOCKS: u64                = 10;
 pub const EPOCHS_PER_YEAR: u64             = DAYS_PER_YEAR * HOURS_PER_DAY * MINUTES_PER_HOUR / 
                                             (BLOCK_DURATION_SECONDS / ONE_MINUTE) / EPOCH_BLOCKS;
 
-pub const INITIAL_REWARD_RATE: u64         = 1 * ONE_TAPE;
+pub const INITIAL_REWARD_RATE: u64         = ONE_TAPE;
 pub const MIN_DIFFICULTY: u64              = 7;
 pub const MIN_PARTICIPATION_TARGET: u64    = 1;
 pub const MAX_PARTICIPATION_TARGET: u64    = 100;

@@ -97,6 +97,7 @@ pub fn process_mine(accounts: &[AccountInfo], data: &[u8]) -> ProgramResult {
     let merkle_proof = &args.recall_proof;
     let leaf = Leaf::new(&[
         (segment_number as u64).to_le_bytes().as_ref(),
+        args.recall_slot.as_ref(),
         args.recall_segment.as_ref(),
     ]);
 
@@ -157,10 +158,10 @@ pub fn process_mine(accounts: &[AccountInfo], data: &[u8]) -> ProgramResult {
 
         // Update the reward rate for the new epoch
         let storage_rate   = get_storage_rate(archive.bytes_stored);
-        let inflation_rate = get_inflation_rate(epoch.number);
+        let base_rate = get_base_rate(epoch.number);
 
         epoch.reward_rate = storage_rate
-            .saturating_add(inflation_rate);
+            .saturating_add(base_rate);
     } else {
 
         // Epoch is still in progress, increment the progress

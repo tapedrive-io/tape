@@ -73,8 +73,6 @@ pub fn process_initialize(accounts: &[AccountInfo<'_>], _data: &[u8]) -> Program
     associated_token_program_info
         .is_program(&spl_associated_token_account::ID)?;
 
-    solana_program::log::msg!("metadata: {}", metadata_program_info.key);
-
     metadata_program_info
         .is_program(&mpl_token_metadata::ID)?;
     rent_sysvar_info

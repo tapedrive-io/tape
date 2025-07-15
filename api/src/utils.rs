@@ -47,12 +47,15 @@ pub fn from_name(val: &[u8; NAME_LEN]) -> String {
 #[inline(always)]
 pub fn compute_leaf(
     segment_id: u64, 
+    segment_slot: u64,
     segment: &[u8; SEGMENT_SIZE],
 ) -> Leaf {
     let segment_id = segment_id.to_le_bytes();
+    let segment_slot = segment_slot.to_le_bytes();
 
     Leaf::new(&[
         segment_id.as_ref(), // u64 (8 bytes)
+        segment_slot.as_ref(), // u64 (8 bytes)
         segment,
     ])
 }
@@ -62,11 +65,13 @@ pub fn compute_leaf(
 pub fn write_segment(
     tree: &mut MerkleTree<{TREE_HEIGHT}>,
     segment_id: u64,
+    segment_slot: u64,
     segment: &[u8; SEGMENT_SIZE],
 ) -> ProgramResult {
 
     let leaf = compute_leaf(
         segment_id, 
+        segment_slot,
         &segment);
 
     check_condition(
@@ -82,6 +87,8 @@ pub fn write_segment(
 pub fn update_segment(
     tree: &mut MerkleTree<{TREE_HEIGHT}>,
     segment_id: u64,
+    old_segment_slot: u64,
+    new_segment_slot: u64,
     old_segment: &[u8; SEGMENT_SIZE],
     new_segment: &[u8; SEGMENT_SIZE],
     proof: &[[u8; 32]; PROOF_LEN],
@@ -89,10 +96,12 @@ pub fn update_segment(
 
     let old_leaf = compute_leaf(
         segment_id, 
+        old_segment_slot,
         &old_segment);
 
     let new_leaf = compute_leaf(
         segment_id, 
+        new_segment_slot,
         &new_segment);
 
     check_condition(

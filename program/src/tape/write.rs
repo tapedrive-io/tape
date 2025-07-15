@@ -2,6 +2,7 @@ use tape_api::prelude::*;
 use steel::*;
 
 pub fn process_write(accounts: &[AccountInfo<'_>], data: &[u8]) -> ProgramResult {
+    let current_slot = Clock::get()?.slot;
     let [
         signer_info, 
         tape_info,
@@ -51,6 +52,7 @@ pub fn process_write(accounts: &[AccountInfo<'_>], data: &[u8]) -> ProgramResult
         write_segment(
             &mut writer.state,
             tape.total_segments + segment_number as u64,
+            current_slot,
             &canonical_segment,
         )?;
     }
@@ -59,6 +61,7 @@ pub fn process_write(accounts: &[AccountInfo<'_>], data: &[u8]) -> ProgramResult
     tape.total_size       += data.len() as u64;
     tape.merkle_root       = writer.state.get_root().to_bytes();
     tape.state             = TapeState::Writing.into();
+    tape.tail_slot         = current_slot;
 
     WriteEvent {
         num_added: segment_count,

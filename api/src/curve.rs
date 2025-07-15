@@ -1,13 +1,13 @@
 use crate::consts::*;
 
-// Pre-computed archive reward rate based on current bytes stored. This is calculated such that
-// each block is worth 1 minute of a 100 year time horizon, with the write cost being
-// 1 tape per megabyte stored. 
-//
-// The hard-coded values avoid u128 math for simplicity and CU.
-//
-// Reward per minute = (total_bytes_stored) / (total_minutes_in_100_years × bytes_per_tape)
-// Equation: reward_per_minute = bytes / (100 * 365 * 24 * 60 * (1 MiB / TAPE))
+/// Pre-computed archive reward rate based on current bytes stored. This is calculated such that
+/// each block is worth 1 minute of a 100 year time horizon, with the write cost being
+/// 1 tape per megabyte stored. 
+///
+/// Reward per minute = (total_bytes_stored) / (total_minutes_in_100_years × bytes_per_tape)
+/// Equation: reward_per_minute = bytes / (100 * 365 * 24 * 60 * (1 MiB / TAPE))
+///
+/// The hard-coded values avoid CU overhead.
 #[inline(always)]
 pub fn get_storage_rate(archive_byte_size: u64) -> u64 {
     match archive_byte_size {
@@ -41,13 +41,12 @@ pub fn get_storage_rate(archive_byte_size: u64) -> u64 {
     }
 }
 
-// Pre-computed inflation rate based on current epoch number. Decay of ~15% every 12 months with a
-// target of 2.1 million TAPE worth of total inflation over 25 years. After which, the archive
-// storage fees would take over, with no further inflation.
-//
-// The hard-coded values avoid complicated math for simplicity and CU.
+/// Pre-computed base rate based on current epoch number. After which, the archive
+/// storage fees would take over, with no further inflation.
+///
+/// The hard-coded values avoid CU overhead.
 #[inline(always)]
-pub fn get_inflation_rate(current_epoch: u64) -> u64 {
+pub fn get_base_rate(current_epoch: u64) -> u64 {
     match current_epoch {
         n if n < 1 * EPOCHS_PER_YEAR   => 10000000000, // Year ~1,  about 1.00 TAPE/min
         n if n < 2 * EPOCHS_PER_YEAR   => 7500000000,  // Year ~2,  about 0.75 TAPE/min
