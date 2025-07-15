@@ -48,7 +48,7 @@ pub fn process_register(accounts: &[AccountInfo<'_>], data: &[u8]) -> ProgramRes
     miner.unclaimed_rewards = 0;
 
     let next_challenge = compute_next_challenge(
-        &miner.challenge,
+        &miner_info.key.to_bytes(),
         slot_hashes_info
     );
 

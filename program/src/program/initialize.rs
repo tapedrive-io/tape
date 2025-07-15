@@ -116,7 +116,7 @@ pub fn process_initialize(accounts: &[AccountInfo<'_>], _data: &[u8]) -> Program
     block.last_block_at     = 0;
 
     let next_challenge = compute_next_challenge(
-        &block.challenge,
+        &BLOCK_ADDRESS.to_bytes(),
         slot_hashes_info
     );
 

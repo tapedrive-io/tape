@@ -8,11 +8,11 @@ pub fn process_mine(accounts: &[AccountInfo], data: &[u8]) -> ProgramResult {
     let args = Mine::try_from_bytes(data)?;
     let [
         signer_info, 
-        archive_info,
         epoch_info, 
         block_info,
         miner_info, 
         tape_info,
+        archive_info,
         slot_hashes_info
     ] = accounts else { 
         return Err(ProgramError::NotEnoughAccountKeys);
@@ -29,7 +29,7 @@ pub fn process_mine(accounts: &[AccountInfo], data: &[u8]) -> ProgramResult {
         .as_account_mut::<Epoch>(&tape_api::ID)?;
 
     let block = block_info
-        .is_epoch()?
+        .is_block()?
         .as_account_mut::<Block>(&tape_api::ID)?;
 
     let tape = tape_info
@@ -69,7 +69,20 @@ pub fn process_mine(accounts: &[AccountInfo], data: &[u8]) -> ProgramResult {
 
     let recall_tape = compute_recall_tape(
         &miner_challenge,
-        archive.tapes_stored
+        archive.tapes_stored // TODO: might need to cache this on the miner to avoid snipping
+    );
+
+    solana_program::msg!(
+        "Recall tape: {}\n, computed challenge: {:?}\n, miner.challenge: {:?}\n, block.challenge: {:?}",
+        recall_tape,
+        miner_challenge,
+        miner.challenge,
+        block.challenge
+    );
+
+    solana_program::msg!(
+        "tape.number: {}",
+        tape.number
     );
 
     check_condition(
@@ -77,11 +90,14 @@ pub fn process_mine(accounts: &[AccountInfo], data: &[u8]) -> ProgramResult {
         TapeError::SolutionInvalid,
     )?;
 
+    solana_program::msg!("2");
+
     let segment_number = compute_recall_segment(
-        &miner.challenge, 
+        &miner_challenge, 
         tape.total_segments
     );
 
+    solana_program::msg!("3");
     // Validate that the miner actually has the data for the tape
 
     let merkle_root = tape.merkle_root;
@@ -91,6 +107,9 @@ pub fn process_mine(accounts: &[AccountInfo], data: &[u8]) -> ProgramResult {
         args.recall_segment.as_ref(),
     ]);
 
+    solana_program::msg!("recall segment: {}", segment_number);
+
+    solana_program::msg!("4");
     assert!(merkle_proof.len() == PROOF_LEN as usize);
 
     check_condition(
@@ -102,19 +121,28 @@ pub fn process_mine(accounts: &[AccountInfo], data: &[u8]) -> ProgramResult {
         TapeError::SolutionInvalid,
     )?;
 
+    solana_program::msg!("5");
+
     // Verify that the PoW solution is good
     check_condition(
         solution.is_valid(&miner_challenge, &args.recall_segment).is_ok(),
         TapeError::SolutionInvalid,
     )?;
 
+    solana_program::msg!("6");
+
     // Update miner multiplier
     update_miner_multiplier(miner, block);
+
+    solana_program::msg!("epoch.reward_rate: {}", epoch.reward_rate);
+    solana_program::msg!("miner.multiplier: {}", miner.multiplier);
 
     let final_reward = get_scaled_reward(
         epoch.reward_rate,
         miner.multiplier
     );
+
+    solana_program::msg!("final_reward: {}", final_reward);
 
     let next_miner_challenge = compute_next_challenge(
         &miner.challenge,

@@ -121,7 +121,6 @@ pub fn build_register_ix(
         accounts: vec![
             AccountMeta::new(signer, true),
             AccountMeta::new(miner_address, false),
-            AccountMeta::new_readonly(ARCHIVE_ADDRESS, false),
             AccountMeta::new_readonly(solana_program::system_program::ID, false),
             AccountMeta::new_readonly(sysvar::rent::ID, false),
             AccountMeta::new_readonly(sysvar::slot_hashes::ID, false),
@@ -135,7 +134,6 @@ pub fn build_register_ix(
 pub fn build_mine_ix(
     signer: Pubkey,
     miner: Pubkey,
-    spool: Pubkey,
     tape: Pubkey,
     solution: Solution,
     recall_segment: [u8; SEGMENT_SIZE],
@@ -145,10 +143,10 @@ pub fn build_mine_ix(
         program_id: crate::ID,
         accounts: vec![
             AccountMeta::new(signer, true),
-            AccountMeta::new(spool, false),
+            AccountMeta::new(EPOCH_ADDRESS, false),
+            AccountMeta::new(BLOCK_ADDRESS, false),
             AccountMeta::new(miner, false),
             AccountMeta::new_readonly(tape, false),
-            AccountMeta::new_readonly(EPOCH_ADDRESS, false),
             AccountMeta::new_readonly(ARCHIVE_ADDRESS, false),
             AccountMeta::new_readonly(sysvar::slot_hashes::ID, false),
         ],
