@@ -27,16 +27,14 @@ pub enum StoreError {
     SegmentsCfNotFound,
     #[error("Slots column family not found")]
     SlotsCfNotFound,
-    #[error("Mutable segments column family not found")]
-    MutableSegmentsCfNotFound,
-    #[error("Mutable slots column family not found")]
-    MutableSlotsCfNotFound,
     #[error("Tape not found: number {0}")]
     TapeNotFound(u64),
     #[error("Segment not found for tape number {0}, segment {1}")]
     SegmentNotFound(u64, u64),
     #[error("Tape not found for address: {0}")]
     TapeNotFoundForAddress(String),
+    #[error("Segment not found for address {0}, segment {1}")]
+    SegmentNotFoundForAddress(String, u64),
     #[error("Invalid pubkey: {0}")]
     InvalidPubkey(String),
     #[error("Segment data exceeds maximum size of {0} bytes")]
@@ -45,8 +43,6 @@ pub enum StoreError {
     InvalidSegmentKey,
     #[error("Invalid path")]
     InvalidPath,
-    #[error("Missing slot for mutable segment")]
-    MissingSlotForMutable,
 }
 
 pub struct TapeStore {
@@ -163,50 +159,6 @@ impl TapeStore {
 
     pub fn add_segment(
         &self,
-        tape_number: u64,
-        segment_number: u64,
-        data: Vec<u8>,
-    ) -> Result<(), StoreError> {
-        if data.len() > SEGMENT_SIZE {
-            return Err(StoreError::SegmentSizeExceeded(SEGMENT_SIZE));
-        }
-
-        let cf_segments = self
-            .db
-            .cf_handle("segments")
-            .ok_or(StoreError::SegmentsCfNotFound)?;
-
-        let mut key = Vec::with_capacity(16);
-        key.extend_from_slice(&tape_number.to_be_bytes());
-        key.extend_from_slice(&segment_number.to_be_bytes());
-
-        self.db.put_cf(cf_segments, &key, &data)?;
-
-        Ok(())
-    }
-
-    pub fn add_slot(
-        &self,
-        tape_number: u64,
-        segment_number: u64,
-        slot: u64,
-    ) -> Result<(), StoreError> {
-        let cf_slots = self
-            .db
-            .cf_handle("slots")
-            .ok_or(StoreError::SlotsCfNotFound)?;
-
-        let mut key = Vec::with_capacity(16);
-        key.extend_from_slice(&tape_number.to_be_bytes());
-        key.extend_from_slice(&segment_number.to_be_bytes());
-
-        self.db.put_cf(cf_slots, &key, &slot.to_be_bytes())?;
-
-        Ok(())
-    }
-
-    pub fn add_mutable_segment(
-        &self,
         tape_address: &Pubkey,
         segment_number: u64,
         data: Vec<u8>,
@@ -217,8 +169,8 @@ impl TapeStore {
 
         let cf = self
             .db
-            .cf_handle("mutable_segments")
-            .ok_or(StoreError::MutableSegmentsCfNotFound)?;
+            .cf_handle("segments")
+            .ok_or(StoreError::SegmentsCfNotFound)?;
 
         let mut key = Vec::with_capacity(40);
         key.extend_from_slice(&tape_address.to_bytes());
@@ -229,7 +181,7 @@ impl TapeStore {
         Ok(())
     }
 
-    pub fn add_mutable_slot(
+    pub fn add_slot(
         &self,
         tape_address: &Pubkey,
         segment_number: u64,
@@ -237,105 +189,14 @@ impl TapeStore {
     ) -> Result<(), StoreError> {
         let cf = self
             .db
-            .cf_handle("mutable_slots")
-            .ok_or(StoreError::MutableSlotsCfNotFound)?;
+            .cf_handle("slots")
+            .ok_or(StoreError::SlotsCfNotFound)?;
 
         let mut key = Vec::with_capacity(40);
         key.extend_from_slice(&tape_address.to_bytes());
         key.extend_from_slice(&segment_number.to_be_bytes());
 
         self.db.put_cf(cf, &key, &slot.to_be_bytes())?;
-
-        Ok(())
-    }
-
-    pub fn finalize_tape(&self, tape_address: &Pubkey, tape_number: u64) -> Result<(), StoreError> {
-        let cf_mutable_segments = self
-            .db
-            .cf_handle("mutable_segments")
-            .ok_or(StoreError::MutableSegmentsCfNotFound)?;
-
-        let cf_mutable_slots = self
-            .db
-            .cf_handle("mutable_slots")
-            .ok_or(StoreError::MutableSlotsCfNotFound)?;
-
-        let cf_segments = self
-            .db
-            .cf_handle("segments")
-            .ok_or(StoreError::SegmentsCfNotFound)?;
-
-        let cf_slots = self
-            .db
-            .cf_handle("slots")
-            .ok_or(StoreError::SlotsCfNotFound)?;
-
-        let cf_tape_by_number = self
-            .db
-            .cf_handle("tape_by_number")
-            .ok_or(StoreError::TapeByNumberCfNotFound)?;
-
-        let cf_tape_by_address = self
-            .db
-            .cf_handle("tape_by_address")
-            .ok_or(StoreError::TapeByAddressCfNotFound)?;
-
-        let prefix = tape_address.to_bytes().to_vec();
-
-        let mut mutable = Vec::new();
-
-        let iter = self.db.prefix_iterator_cf(cf_mutable_segments, &prefix);
-
-        for item in iter {
-            let (key, value) = item?;
-
-            if key.len() != 40 || !key.starts_with(&prefix) {
-                continue;
-            }
-
-            let segment_number = u64::from_be_bytes(
-                key[32..40].try_into().map_err(|_| StoreError::InvalidSegmentKey)?,
-            );
-
-            let slot_bytes = self
-                .db
-                .get_cf(cf_mutable_slots, &key)?
-                .ok_or(StoreError::MissingSlotForMutable)?;
-
-            let slot = u64::from_be_bytes(
-                slot_bytes.try_into().map_err(|_| StoreError::InvalidSegmentKey)?,
-            );
-
-            mutable.push((segment_number, value.to_vec(), slot));
-        }
-
-        mutable.sort_by_key(|t| t.0);
-
-        let mut batch = WriteBatch::default();
-
-        let tape_num_bytes = tape_number.to_be_bytes().to_vec();
-        let address_bytes = tape_address.to_bytes().to_vec();
-
-        batch.put_cf(cf_tape_by_number, &tape_num_bytes, &address_bytes);
-        batch.put_cf(cf_tape_by_address, &address_bytes, &tape_num_bytes);
-
-        for (segment_number, data, slot) in mutable {
-            let mut final_key = Vec::with_capacity(16);
-            final_key.extend_from_slice(&tape_num_bytes);
-            final_key.extend_from_slice(&segment_number.to_be_bytes());
-
-            batch.put_cf(cf_segments, &final_key, &data);
-            batch.put_cf(cf_slots, &final_key, &slot.to_be_bytes());
-
-            let mut mutable_key = Vec::with_capacity(40);
-            mutable_key.extend_from_slice(&address_bytes);
-            mutable_key.extend_from_slice(&segment_number.to_be_bytes());
-
-            batch.delete_cf(cf_mutable_segments, &mutable_key);
-            batch.delete_cf(cf_mutable_slots, &mutable_key);
-        }
-
-        self.db.write(batch)?;
 
         Ok(())
     }
@@ -384,13 +245,14 @@ impl TapeStore {
             .cf_handle("segments")
             .ok_or(StoreError::SegmentsCfNotFound)?;
 
-        let prefix = tape_number.to_be_bytes().to_vec();
+        let address = self.get_tape_address(tape_number)?;
+        let prefix = address.to_bytes().to_vec();
 
         let mut segments = Vec::new();
         let iter = self.db.prefix_iterator_cf(cf, &prefix);
         for item in iter {
             let (key, value) = item?;
-            if key.len() != 16 {
+            if key.len() != 40 {
                 continue;
             }
             if !key.starts_with(&prefix) {
@@ -398,7 +260,7 @@ impl TapeStore {
             }
 
             let segment_number = u64::from_be_bytes(
-                key[8..16]
+                key[32..40]
                     .try_into()
                     .map_err(|_| StoreError::InvalidSegmentKey)?,
             );
@@ -409,15 +271,15 @@ impl TapeStore {
         Ok(segments)
     }
 
-   pub fn get_mutable_segment(
+    pub fn get_segment_by_address(
         &self,
         tape_address: &Pubkey,
         segment_number: u64,
     ) -> Result<Vec<u8>, StoreError> {
         let cf = self
             .db
-            .cf_handle("mutable_segments")
-            .ok_or(StoreError::MutableSegmentsCfNotFound)?;
+            .cf_handle("segments")
+            .ok_or(StoreError::SegmentsCfNotFound)?;
 
         let mut key = Vec::with_capacity(40);
         key.extend_from_slice(&tape_address.to_bytes());
@@ -426,9 +288,9 @@ impl TapeStore {
         let segment_data = self
             .db
             .get_cf(cf, &key)?
-            .ok_or(StoreError::SegmentNotFound(0, segment_number))?;
+            .ok_or(StoreError::SegmentNotFoundForAddress(tape_address.to_string(), segment_number))?;
 
-        Ok(segment_data.to_vec())
+        Ok(segment_data)
     }
 
     pub fn get_segment(
@@ -441,8 +303,10 @@ impl TapeStore {
             .cf_handle("segments")
             .ok_or(StoreError::SegmentsCfNotFound)?;
 
-        let mut key = Vec::with_capacity(16);
-        key.extend_from_slice(&tape_number.to_be_bytes());
+        let address = self.get_tape_address(tape_number)?;
+
+        let mut key = Vec::with_capacity(40);
+        key.extend_from_slice(&address.to_bytes());
         key.extend_from_slice(&segment_number.to_be_bytes());
 
         let segment_data = self
@@ -450,7 +314,7 @@ impl TapeStore {
             .get_cf(cf, &key)?
             .ok_or(StoreError::SegmentNotFound(tape_number, segment_number))?;
 
-        Ok(segment_data.to_vec())
+        Ok(segment_data)
     }
 
     pub fn get_slot(
@@ -463,8 +327,10 @@ impl TapeStore {
             .cf_handle("slots")
             .ok_or(StoreError::SlotsCfNotFound)?;
 
-        let mut key = Vec::with_capacity(16);
-        key.extend_from_slice(&tape_number.to_be_bytes());
+        let address = self.get_tape_address(tape_number)?;
+
+        let mut key = Vec::with_capacity(40);
+        key.extend_from_slice(&address.to_bytes());
         key.extend_from_slice(&segment_number.to_be_bytes());
 
         let slot_bytes = self
@@ -477,15 +343,15 @@ impl TapeStore {
         ))
     }
 
-    pub fn get_mutable_slot(
+    pub fn get_slot_by_address(
         &self,
         tape_address: &Pubkey,
         segment_number: u64,
     ) -> Result<u64, StoreError> {
         let cf = self
             .db
-            .cf_handle("mutable_slots")
-            .ok_or(StoreError::MutableSlotsCfNotFound)?;
+            .cf_handle("slots")
+            .ok_or(StoreError::SlotsCfNotFound)?;
 
         let mut key = Vec::with_capacity(40);
         key.extend_from_slice(&tape_address.to_bytes());
@@ -494,7 +360,7 @@ impl TapeStore {
         let slot_bytes = self
             .db
             .get_cf(cf, &key)?
-            .ok_or(StoreError::SegmentNotFound(0, segment_number))?;  // Using 0 as placeholder
+            .ok_or(StoreError::SegmentNotFoundForAddress(tape_address.to_string(), segment_number))?;
 
         Ok(u64::from_be_bytes(
             slot_bytes.try_into().map_err(|_| StoreError::InvalidSegmentKey)?,
@@ -539,20 +405,20 @@ fn create_cf_descriptors() -> Vec<ColumnFamilyDescriptor> {
     });
     cf_tape_by_address_opts.set_compression_type(DBCompressionType::None);
 
-    // Options for segments CF (immutable)
+    // Options for segments CF
     let mut cf_segments_opts = Options::default();
-    cf_segments_opts.set_prefix_extractor(SliceTransform::create_fixed_prefix(8));
+    cf_segments_opts.set_prefix_extractor(SliceTransform::create_fixed_prefix(32));
     let mut bbt_segments = BlockBasedOptions::default();
     bbt_segments.set_bloom_filter(10.0, false);
     bbt_segments.set_block_size(256);
     cf_segments_opts.set_block_based_table_factory(&bbt_segments);
     cf_segments_opts.set_compression_type(DBCompressionType::None);
 
-    // Options for slots CF (immutable)
+    // Options for slots CF
     let mut cf_slots_opts = Options::default();
-    cf_slots_opts.set_prefix_extractor(SliceTransform::create_fixed_prefix(8));
+    cf_slots_opts.set_prefix_extractor(SliceTransform::create_fixed_prefix(32));
     cf_slots_opts.set_plain_table_factory(&PlainTableFactoryOptions {
-        user_key_length: 16,
+        user_key_length: 40,
         bloom_bits_per_key: 10,
         hash_table_ratio: 0.75,
         index_sparseness: 16,
@@ -563,30 +429,6 @@ fn create_cf_descriptors() -> Vec<ColumnFamilyDescriptor> {
     });
     cf_slots_opts.set_compression_type(DBCompressionType::None);
 
-    // Options for mutable_segments CF
-    let mut cf_mutable_segments_opts = Options::default();
-    cf_mutable_segments_opts.set_prefix_extractor(SliceTransform::create_fixed_prefix(32));
-    let mut bbt_mutable_segments = BlockBasedOptions::default();
-    bbt_mutable_segments.set_bloom_filter(10.0, false);
-    bbt_mutable_segments.set_block_size(256);
-    cf_mutable_segments_opts.set_block_based_table_factory(&bbt_mutable_segments);
-    cf_mutable_segments_opts.set_compression_type(DBCompressionType::None);
-
-    // Options for mutable_slots CF
-    let mut cf_mutable_slots_opts = Options::default();
-    cf_mutable_slots_opts.set_prefix_extractor(SliceTransform::create_fixed_prefix(32));
-    cf_mutable_slots_opts.set_plain_table_factory(&PlainTableFactoryOptions {
-        user_key_length: 40,
-        bloom_bits_per_key: 10,
-        hash_table_ratio: 0.75,
-        index_sparseness: 16,
-        huge_page_tlb_size: 0,
-        encoding_type: rocksdb::KeyEncodingType::Prefix,
-        full_scan_mode: false,
-        store_index_in_file: false,
-    });
-    cf_mutable_slots_opts.set_compression_type(DBCompressionType::None);
-
     // Options for health CF
     let mut cf_health_opts = Options::default();
     cf_health_opts.set_compression_type(DBCompressionType::None);
@@ -595,8 +437,6 @@ fn create_cf_descriptors() -> Vec<ColumnFamilyDescriptor> {
     let cf_tape_by_address = ColumnFamilyDescriptor::new("tape_by_address", cf_tape_by_address_opts);
     let cf_segments = ColumnFamilyDescriptor::new("segments", cf_segments_opts);
     let cf_slots = ColumnFamilyDescriptor::new("slots", cf_slots_opts);
-    let cf_mutable_segments = ColumnFamilyDescriptor::new("mutable_segments", cf_mutable_segments_opts);
-    let cf_mutable_slots = ColumnFamilyDescriptor::new("mutable_slots", cf_mutable_slots_opts);
     let cf_health = ColumnFamilyDescriptor::new("health", cf_health_opts);
 
     vec![
@@ -604,8 +444,6 @@ fn create_cf_descriptors() -> Vec<ColumnFamilyDescriptor> {
         cf_tape_by_address,
         cf_segments,
         cf_slots,
-        cf_mutable_segments,
-        cf_mutable_slots,
         cf_health,
     ]
 }
@@ -658,31 +496,18 @@ mod tests {
         let (store, _temp_dir) = setup_store()?;
         let tape_number = 1;
         let segment_number = 0;
+        let address = Pubkey::new_unique();
         let data = vec![1, 2, 3];
         let slot = 100;
 
-        store.add_segment(tape_number, segment_number, data.clone())?;
-        store.add_slot(tape_number, segment_number, slot)?;
+        store.add_tape(tape_number, &address)?;
+        store.add_segment(&address, segment_number, data.clone())?;
+        store.add_slot(&address, segment_number, slot)?;
 
         let retrieved_data = store.get_segment(tape_number, segment_number)?;
         assert_eq!(retrieved_data, data);
         let retrieved_slot = store.get_slot(tape_number, segment_number)?;
         assert_eq!(retrieved_slot, slot);
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_finalize_and_get_tape() -> Result<(), StoreError> {
-        let (store, _temp_dir) = setup_store()?;
-        let tape_number = 1;
-        let address = Pubkey::new_unique();
-
-        store.finalize_tape(&address, tape_number)?;
-        let retrieved_number = store.get_tape_number(&address)?;
-        assert_eq!(retrieved_number, tape_number);
-        let retrieved_address = store.get_tape_address(tape_number)?;
-        assert_eq!(retrieved_address, address);
 
         Ok(())
     }
@@ -698,12 +523,12 @@ mod tests {
         let slot_1 = 100;
         let slot_2 = 101;
 
-        store.add_mutable_segment(&address, 1, segment_data_2.clone())?;
-        store.add_mutable_slot(&address, 1, slot_2)?;
-        store.add_mutable_segment(&address, 0, segment_data_1.clone())?;
-        store.add_mutable_slot(&address, 0, slot_1)?;
+        store.add_segment(&address, 1, segment_data_2.clone())?;
+        store.add_slot(&address, 1, slot_2)?;
+        store.add_segment(&address, 0, segment_data_1.clone())?;
+        store.add_slot(&address, 0, slot_1)?;
 
-        store.finalize_tape(&address, tape_number)?;
+        store.add_tape(tape_number, &address)?;
 
         let segments = store.get_tape_segments(tape_number)?;
         assert_eq!(segments.len(), 2);
@@ -729,12 +554,12 @@ mod tests {
         let data = vec![1, 2, 3];
         let slot = 100;
 
-        store.add_mutable_segment(&address, segment_number, data.clone())?;
-        store.add_mutable_slot(&address, segment_number, slot)?;
+        store.add_segment(&address, segment_number, data.clone())?;
+        store.add_slot(&address, segment_number, slot)?;
 
-        let retrieved_data = store.get_mutable_segment(&address, segment_number)?;
+        let retrieved_data = store.get_segment_by_address(&address, segment_number)?;
         assert_eq!(retrieved_data, data);
-        let retrieved_slot = store.get_mutable_slot(&address, segment_number)?;
+        let retrieved_slot = store.get_slot_by_address(&address, segment_number)?;
         assert_eq!(retrieved_slot, slot);
 
         Ok(())
@@ -746,7 +571,7 @@ mod tests {
         let address = Pubkey::new_unique();
 
         let oversized_data = vec![0; SEGMENT_SIZE + 1];
-        let result = store.add_mutable_segment(&address, 0, oversized_data);
+        let result = store.add_segment(&address, 0, oversized_data);
         assert!(matches!(result, Err(StoreError::SegmentSizeExceeded(_))));
 
         Ok(())
@@ -775,13 +600,13 @@ mod tests {
         let tape2_number = 2;
         let tape2_address = Pubkey::new_unique();
 
-        store.add_mutable_segment(&tape1_address, 0, vec![1, 2, 3])?;
-        store.add_mutable_slot(&tape1_address, 0, 100)?;
-        store.finalize_tape(&tape1_address, tape1_number)?;
+        store.add_segment(&tape1_address, 0, vec![1, 2, 3])?;
+        store.add_slot(&tape1_address, 0, 100)?;
+        store.add_tape(tape1_number, &tape1_address)?;
 
-        store.add_mutable_segment(&tape2_address, 0, vec![4, 5, 6])?;
-        store.add_mutable_slot(&tape2_address, 0, 101)?;
-        store.finalize_tape(&tape2_address, tape2_number)?;
+        store.add_segment(&tape2_address, 0, vec![4, 5, 6])?;
+        store.add_slot(&tape2_address, 0, 101)?;
+        store.add_tape(tape2_number, &tape2_address)?;
 
         assert_eq!(store.get_tape_number(&tape1_address)?, tape1_number);
         assert_eq!(store.get_tape_address(tape1_number)?, tape1_address);
@@ -806,9 +631,9 @@ mod tests {
         let address = Pubkey::new_unique();
         let segment_data = vec![1, 2, 3];
 
-        store.add_mutable_segment(&address, segment_number, segment_data.clone())?;
-        store.add_mutable_slot(&address, segment_number, 100)?;
-        store.finalize_tape(&address, tape_number)?;
+        store.add_segment(&address, segment_number, segment_data.clone())?;
+        store.add_slot(&address, segment_number, 100)?;
+        store.add_tape(tape_number, &address)?;
 
         let retrieved_data = store.get_segment(tape_number, segment_number)?;
         assert_eq!(retrieved_data, segment_data);
@@ -817,7 +642,7 @@ mod tests {
     }
 
     #[test]
-    fn test_get_segment_non_existent_segment() -> Result<(), StoreError> {
+    fn test_get_segment_non_existent() -> Result<(), StoreError> {
         let (store, _temp_dir) = setup_store()?;
         let tape_number = 1;
         let segment_number = 0;
@@ -836,11 +661,11 @@ mod tests {
         let segment_data_1 = vec![1, 2, 3];
         let segment_data_2 = vec![4, 5, 6];
 
-        store.add_mutable_segment(&address, 0, segment_data_1.clone())?;
-        store.add_mutable_slot(&address, 0, 100)?;
-        store.add_mutable_segment(&address, 1, segment_data_2.clone())?;
-        store.add_mutable_slot(&address, 1, 101)?;
-        store.finalize_tape(&address, tape_number)?;
+        store.add_segment(&address, 0, segment_data_1.clone())?;
+        store.add_slot(&address, 0, 100)?;
+        store.add_segment(&address, 1, segment_data_2.clone())?;
+        store.add_slot(&address, 1, 101)?;
+        store.add_tape(tape_number, &address)?;
 
         let retrieved_data_1 = store.get_segment(tape_number, 0)?;
         assert_eq!(retrieved_data_1, segment_data_1);
