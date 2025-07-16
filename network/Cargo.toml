@@ -39,6 +39,13 @@ solana-account-decoder.workspace = true
 solana-transaction-status-client-types.workspace = true
 thiserror = "2.0.12"
 axum = "0.8.4"
+num_cpus = "1.17.0"
 
 [dev-dependencies]
 tempdir = "0.3"
+criterion = { version = "0.5", features = ["html_reports"] }
+rand = "0.8"
+
+[[bench]]
+name = "tape_store_bench"
+harness = false

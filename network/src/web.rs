@@ -170,7 +170,140 @@ pub fn rpc_get_tape_number(store: &TapeStore, params: &Value) -> Result<Value, R
         })
 }
 
-/// Fetch a single segment’s data by tape address and segment number.
+/// Fetch a single segment’s data by tape number and segment number.
+///
+/// Parameters:
+/// - `tape_number`: Numeric ID of the tape.
+/// - `segment_number`: Zero-based segment index.
+///
+/// Returns a Base64-encoded string of the raw bytes.
+///
+/// Example invocation:
+/// ```bash
+/// curl -X POST http://127.0.0.1:3000/api \
+///      -H 'Content-Type: application/json' \
+///      -d '{"jsonrpc":"2.0","id":3,"method":"getSegment","params":{"tape_number":1,"segment_number":3}}'
+/// ```
+pub fn rpc_get_segment(store: &TapeStore, params: &Value) -> Result<Value, RpcError> {
+    let tn = params
+        .get("tape_number")
+        .and_then(Value::as_u64)
+        .ok_or(RpcError {
+            code: ErrorCode::InvalidParams.code(),
+            message: "invalid or missing tape_number".into(),
+        })?;
+
+    let sn = params
+        .get("segment_number")
+        .and_then(Value::as_u64)
+        .ok_or(RpcError {
+            code: ErrorCode::InvalidParams.code(),
+            message: "invalid or missing segment_number".into(),
+        })?;
+
+    store
+        .get_segment(tn, sn)
+        .map(|data| json!(base64::encode(data)))
+        .map_err(|e| match e {
+            StoreError::SegmentNotFound(_, num) => RpcError {
+                code: ErrorCode::ServerError.code(),
+                message: format!("segment {} not found", num),
+            },
+            other => RpcError {
+                code: ErrorCode::ServerError.code(),
+                message: other.to_string(),
+            },
+        })
+}
+
+/// Retrieve all segments and their data for a given tape number.
+///
+/// Parameters:
+/// - `tape_number`: Numeric ID of the tape.
+///
+/// Returns a JSON array of objects `[{ segment_number, data }]`, where `data` is Base64.
+///
+/// Example invocation:
+///
+/// ```bash
+/// curl -X POST http://127.0.0.1:3000/api \
+///      -H 'Content-Type: application/json' \
+///      -d '{"jsonrpc":"2.0","id":4,"method":"getTape","params":{"tape_number":1}}'
+/// ```
+pub fn rpc_get_tape(store: &TapeStore, params: &Value) -> Result<Value, RpcError> {
+    let tn = params
+        .get("tape_number")
+        .and_then(Value::as_u64)
+        .ok_or(RpcError {
+            code: ErrorCode::InvalidParams.code(),
+            message: "invalid or missing tape_number".into(),
+        })?;
+
+    let segments = store.get_tape_segments(tn).map_err(|e| RpcError {
+        code: ErrorCode::ServerError.code(),
+        message: e.to_string(),
+    })?;
+
+    let arr: Vec<Value> = segments
+        .into_iter()
+        .map(|(num, data)| {
+            json!({
+                "segment_number": num,
+                "data": base64::encode(data),
+            })
+        })
+        .collect();
+
+    Ok(json!(arr))
+}
+
+/// Fetch a single slot by tape number and segment number.
+///
+/// Parameters:
+/// - `tape_number`: Numeric ID of the tape.
+/// - `segment_number`: Zero-based segment index.
+///
+/// Returns the u64 slot value.
+///
+/// Example invocation:
+/// ```bash
+/// curl -X POST http://127.0.0.1:3000/api \
+///      -H 'Content-Type: application/json' \
+///      -d '{"jsonrpc":"2.0","id":6,"method":"getSlot","params":{"tape_number":1,"segment_number":3}}'
+/// ```
+pub fn rpc_get_slot(store: &TapeStore, params: &Value) -> Result<Value, RpcError> {
+    let tn = params
+        .get("tape_number")
+        .and_then(Value::as_u64)
+        .ok_or(RpcError {
+            code: ErrorCode::InvalidParams.code(),
+            message: "invalid or missing tape_number".into(),
+        })?;
+
+    let sn = params
+        .get("segment_number")
+        .and_then(Value::as_u64)
+        .ok_or(RpcError {
+            code: ErrorCode::InvalidParams.code(),
+            message: "invalid or missing segment_number".into(),
+        })?;
+
+    store
+        .get_slot(tn, sn)
+        .map(|slot| json!(slot))
+        .map_err(|e| match e {
+            StoreError::SegmentNotFound(_, num) => RpcError {
+                code: ErrorCode::ServerError.code(),
+                message: format!("slot for segment {} not found", num),
+            },
+            other => RpcError {
+                code: ErrorCode::ServerError.code(),
+                message: other.to_string(),
+            },
+        })
+}
+
+/// Fetch a single mutable segment’s data by tape address and segment number.
 ///
 /// Parameters:
 /// - `tape_address`: Base-58 pubkey identifying the tape.
@@ -182,9 +315,9 @@ pub fn rpc_get_tape_number(store: &TapeStore, params: &Value) -> Result<Value, R
 /// ```bash
 /// curl -X POST http://127.0.0.1:3000/api \
 ///      -H 'Content-Type: application/json' \
-///      -d '{"jsonrpc":"2.0","id":3,"method":"getSegment","params":{"tape_address":"<PUBKEY>","segment_number":3}}'
+///      -d '{"jsonrpc":"2.0","id":7,"method":"getMutableSegment","params":{"tape_address":"<PUBKEY>","segment_number":3}}'
 /// ```
-pub fn rpc_get_segment(store: &TapeStore, params: &Value) -> Result<Value, RpcError> {
+pub fn rpc_get_mutable_segment(store: &TapeStore, params: &Value) -> Result<Value, RpcError> {
     let addr = params
         .get("tape_address")
         .and_then(Value::as_str)
@@ -207,12 +340,12 @@ pub fn rpc_get_segment(store: &TapeStore, params: &Value) -> Result<Value, RpcEr
     })?;
 
     store
-        .get_segment(&pk, sn)
+        .get_mutable_segment(&pk, sn)
         .map(|data| json!(base64::encode(data)))
         .map_err(|e| match e {
             StoreError::SegmentNotFound(_, num) => RpcError {
                 code: ErrorCode::ServerError.code(),
-                message: format!("segment {} not found", num),
+                message: format!("mutable segment {} not found", num),
             },
             other => RpcError {
                 code: ErrorCode::ServerError.code(),
@@ -221,21 +354,21 @@ pub fn rpc_get_segment(store: &TapeStore, params: &Value) -> Result<Value, RpcEr
         })
 }
 
-/// Retrieve all segments and their data for a given tape address.
+/// Fetch a single mutable slot by tape address and segment number.
 ///
 /// Parameters:
 /// - `tape_address`: Base-58 pubkey identifying the tape.
+/// - `segment_number`: Zero-based segment index.
 ///
-/// Returns a JSON array of objects `[{ segment_number, data }]`, where `data` is Base64.
+/// Returns the u64 slot value.
 ///
 /// Example invocation:
-///
 /// ```bash
 /// curl -X POST http://127.0.0.1:3000/api \
 ///      -H 'Content-Type: application/json' \
-///      -d '{"jsonrpc":"2.0","id":4,"method":"getTape","params":{"tape_address":"<PUBKEY>"}}'
+///      -d '{"jsonrpc":"2.0","id":8,"method":"getMutableSlot","params":{"tape_address":"<PUBKEY>","segment_number":3}}'
 /// ```
-pub fn rpc_get_tape(store: &TapeStore, params: &Value) -> Result<Value, RpcError> {
+pub fn rpc_get_mutable_slot(store: &TapeStore, params: &Value) -> Result<Value, RpcError> {
     let addr = params
         .get("tape_address")
         .and_then(Value::as_str)
@@ -244,27 +377,32 @@ pub fn rpc_get_tape(store: &TapeStore, params: &Value) -> Result<Value, RpcError
             message: "invalid or missing tape_address".into(),
         })?;
 
+    let sn = params
+        .get("segment_number")
+        .and_then(Value::as_u64)
+        .ok_or(RpcError {
+            code: ErrorCode::InvalidParams.code(),
+            message: "invalid or missing segment_number".into(),
+        })?;
+
     let pk = Pubkey::from_str(addr).map_err(|e| RpcError {
         code: ErrorCode::InvalidParams.code(),
         message: format!("invalid pubkey: {}", e),
     })?;
 
-    let segments = store.get_tape_segments(&pk).map_err(|e| RpcError {
-        code: ErrorCode::ServerError.code(),
-        message: e.to_string(),
-    })?;
-
-    let arr: Vec<Value> = segments
-        .into_iter()
-        .map(|(num, data)| {
-            json!({
-                "segment_number": num,
-                "data": base64::encode(data),
-            })
+    store
+        .get_mutable_slot(&pk, sn)
+        .map(|slot| json!(slot))
+        .map_err(|e| match e {
+            StoreError::SegmentNotFound(_, num) => RpcError {
+                code: ErrorCode::ServerError.code(),
+                message: format!("mutable slot for segment {} not found", num),
+            },
+            other => RpcError {
+                code: ErrorCode::ServerError.code(),
+                message: other.to_string(),
+            },
         })
-        .collect();
-
-    Ok(json!(arr))
 }
 
 async fn rpc_handler(
@@ -279,6 +417,9 @@ async fn rpc_handler(
         "getTapeNumber" => rpc_get_tape_number(&store, &req.params),
         "getSegment" => rpc_get_segment(&store, &req.params),
         "getTape" => rpc_get_tape(&store, &req.params),
+        "getSlot" => rpc_get_slot(&store, &req.params),
+        "getMutableSegment" => rpc_get_mutable_segment(&store, &req.params),
+        "getMutableSlot" => rpc_get_mutable_slot(&store, &req.params),
         _ => Err(RpcError {
             code: ErrorCode::MethodNotFound.code(),
             message: "method not found".into(),
