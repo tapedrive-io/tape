@@ -107,6 +107,7 @@ fn archive_block(store: &TapeStore, block: &ProcessedBlock) -> Result<()> {
 
     for ((tape, segment), data) in &block.writes {
         store.add_segment(tape, *segment, data.clone())?;
+        store.add_slot(tape, *segment, block.slot)?;
     }
 
     Ok(())
