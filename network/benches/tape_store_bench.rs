@@ -194,11 +194,11 @@ fn bench_get_tape_segments(c: &mut Criterion) {
     let temp_dir = TempDir::new("bench_get_tape_segments").unwrap();
     let store = TapeStore::new(temp_dir.path()).unwrap();
 
-    let mut tape_numbers = Vec::with_capacity(NUM_TAPES);
+    let mut tape_addresses = Vec::with_capacity(NUM_TAPES);
     for tape_idx in 0..NUM_TAPES {
         let tape_address = Pubkey::new_unique();
         let tape_number = (tape_idx + 1) as u64;
-        tape_numbers.push(tape_number);
+        tape_addresses.push(tape_address);
 
         for segment_number in 0..SEGMENTS_PER_TAPE {
             let data = generate_random_data(SEGMENT_SIZE);
@@ -214,10 +214,10 @@ fn bench_get_tape_segments(c: &mut Criterion) {
 
     let mut group = c.benchmark_group("get_tape_segments");
     group.bench_function("get_tape_segments_many_tapes", |b| {
-        let tape_number = tape_numbers[NUM_TAPES / 2];
+        let tape_address = &tape_addresses[NUM_TAPES / 2];
 
         b.iter(|| {
-            store.get_tape_segments(black_box(tape_number)).unwrap();
+            store.get_tape_segments(black_box(tape_address)).unwrap();
         })
     });
     group.finish();

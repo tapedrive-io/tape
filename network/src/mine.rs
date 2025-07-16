@@ -1,5 +1,4 @@
 use anyhow::{Result, anyhow};
-use chrono::Utc;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::{signature::Keypair, pubkey::Pubkey};
 use tape_client::mine::mine::perform_mining;
@@ -24,7 +23,7 @@ pub async fn mine_loop(
     miner_address: &Pubkey,
     signer: &Keypair,
 ) -> Result<()> {
-    let interval = Duration::from_secs(60);
+    let interval = Duration::from_secs(10);
 
     loop {
         match try_mine_iteration(store, client, miner_address, signer).await {
@@ -46,32 +45,29 @@ async fn try_mine_iteration(
     miner_address: &Pubkey,
     signer: &Keypair,
 ) -> Result<()> {
-    let current_time = Utc::now().timestamp();
-
     println!("DEBUG: Starting mine process...");
 
     let epoch = get_epoch_account(client)
         .await
         .map_err(|e| anyhow!("Failed to get epoch account: {}", e))?.0;
 
-    println!("DEBUG: Current time: {}", current_time);
-    println!("DEBUG: Epoch.last_epoch_at: {}", epoch.last_epoch_at);
-
-    if current_time > epoch.last_epoch_at + EPOCH_SECONDS {
-        println!("DEBUG: Epoch is stale, advancing...");
-        tape_client::advance(client, signer).await?;
-        println!("DEBUG: Advanced epoch to {}", current_time);
-    }
-
-    //println!("DEBUG: Epoch account: {:?}", epoch);
+    let block = get_block_account(client)
+        .await
+        .map_err(|e| anyhow!("Failed to get block account: {}", e))?.0;
 
     let miner = get_miner_account(client, miner_address)
         .await
         .map_err(|e| anyhow!("Failed to get miner account: {}", e))?.0;
 
-    //println!("DEBUG: Miner account: {:?}", miner);
+    let miner_challenge = compute_challenge(
+        &block.challenge,
+        &miner.challenge,
+    );
 
-    let tape_number = miner.recall_tape;
+    let tape_number = compute_recall_tape(
+        &miner_challenge,
+        block.challenge_set
+    );
 
     println!("DEBUG: Recall tape number: {:?}", tape_number);
 
@@ -84,20 +80,28 @@ async fn try_mine_iteration(
             .await
             .map_err(|e| anyhow!("Failed to get tape account: {}", e))?.0;
 
-        //println!("DEBUG: Tape account: {:?}", tape);
+        let segment_number = compute_recall_segment(
+            &miner_challenge,
+            tape.total_segments
+        );
 
         let segments = store.get_tape_segments(&tape_address)?;
         if segments.len() != tape.total_segments as usize {
-            return Err(anyhow!("Invalid number of segments for tape {}: expected {}, got {}", 
+            return Err(anyhow!("Local store is missing some segments for tape number {}: expected {}, got {}", 
                 tape_address, tape.total_segments, segments.len()));
         }
 
-        let (solution, recall_segment, merkle_proof) = compute_challenge_solution(
-            &tape,
-            &miner,
-            segments,
-            epoch.difficulty,
-        )?;
+        let recall_slot = store.get_slot(tape_number, segment_number)?;
+
+        let (solution, recall_segment, merkle_proof) = 
+            compute_challenge_solution(
+                &tape,
+                &miner_challenge,
+                recall_slot,
+                segment_number,
+                segments,
+                epoch.target_difficulty,
+            )?;
 
         let sig = perform_mining(
             client, 
@@ -105,6 +109,7 @@ async fn try_mine_iteration(
             *miner_address, 
             tape_address, 
             solution, 
+            recall_slot,
             recall_segment, 
             merkle_proof,
         ).await?;
@@ -122,17 +127,12 @@ async fn try_mine_iteration(
 
 fn compute_challenge_solution(
     tape: &Tape,
-    miner: &Miner,
+    miner_challenge: &[u8; 32],
+    segment_slot: u64,
+    segment_number: u64,
     segments: Vec<(u64, Vec<u8>)>,
     epoch_difficulty: u64,
 ) -> Result<(Solution, [u8; SEGMENT_SIZE], [[u8; 32]; TREE_HEIGHT])> {
-    //println!("DEBUG: Segments: {:?}", segments);
-
-    let segment_number = compute_recall_segment(
-        &miner.current_challenge,
-        tape.total_segments
-    );
-
     let mut leaves = Vec::new();
     let mut recall_segment = [0; SEGMENT_SIZE];
 
@@ -149,6 +149,7 @@ fn compute_challenge_solution(
         let data = padded_array::<SEGMENT_SIZE>(segment_data);
         let leaf = compute_leaf(
             *segment_id,
+            segment_slot,
             &data,
         );
 
@@ -160,8 +161,6 @@ fn compute_challenge_solution(
             anyhow!("Failed to add leaf to Merkle tree: {:?}", e)
         })?;
     }
-
-    //println!("DEBUG: Merkle root: {:?}", merkle_tree.get_root());
 
     let merkle_proof = merkle_tree.get_merkle_proof(&leaves, segment_number as usize);
     let merkle_proof = merkle_proof
@@ -178,14 +177,14 @@ fn compute_challenge_solution(
     }
 
     let solution = solve_challenge(
-        miner.current_challenge, 
+        *miner_challenge, 
         &recall_segment, 
         epoch_difficulty
     )?;
 
     println!("DEBUG: Solution difficulty: {:?}", solution.difficulty());
 
-    solution.is_valid(&miner.current_challenge, &recall_segment)
+    solution.is_valid(&miner_challenge, &recall_segment)
         .map_err(|_| anyhow!("Invalid solution"))?;
 
     println!("DEBUG: Solution is valid!");

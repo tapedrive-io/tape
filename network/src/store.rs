@@ -238,15 +238,14 @@ impl TapeStore {
 
     pub fn get_tape_segments(
         &self,
-        tape_number: u64,
+        tape_address: &Pubkey,
     ) -> Result<Vec<(u64, Vec<u8>)>, StoreError> {
         let cf = self
             .db
             .cf_handle("segments")
             .ok_or(StoreError::SegmentsCfNotFound)?;
 
-        let address = self.get_tape_address(tape_number)?;
-        let prefix = address.to_bytes().to_vec();
+        let prefix = tape_address.to_bytes().to_vec();
 
         let mut segments = Vec::new();
         let iter = self.db.prefix_iterator_cf(cf, &prefix);
@@ -463,7 +462,6 @@ pub fn secondary() -> Result<TapeStore, StoreError> {
     TapeStore::new_secondary(&db_primary, &db_secondary)
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -513,7 +511,7 @@ mod tests {
     }
 
     #[test]
-    fn test_add_mutable_and_finalize_segments() -> Result<(), StoreError> {
+    fn test_add_and_get_segments() -> Result<(), StoreError> {
         let (store, _temp_dir) = setup_store()?;
         let tape_number = 1;
         let address = Pubkey::new_unique();
@@ -530,7 +528,7 @@ mod tests {
 
         store.add_tape(tape_number, &address)?;
 
-        let segments = store.get_tape_segments(tape_number)?;
+        let segments = store.get_tape_segments(&address)?;
         assert_eq!(segments.len(), 2);
         assert_eq!(segments[0], (0, segment_data_1));
         assert_eq!(segments[1], (1, segment_data_2));
@@ -540,14 +538,15 @@ mod tests {
         let slot_retrieved_1 = store.get_slot(tape_number, 1)?;
         assert_eq!(slot_retrieved_1, slot_2);
 
-        let segments = store.get_tape_segments(999)?; // non-existent
+        let non_address = Pubkey::new_unique();
+        let segments = store.get_tape_segments(&non_address)?;
         assert_eq!(segments.len(), 0);
 
         Ok(())
     }
 
     #[test]
-    fn test_get_mutable_segment_and_slot() -> Result<(), StoreError> {
+    fn test_get_segment_by_address() -> Result<(), StoreError> {
         let (store, _temp_dir) = setup_store()?;
         let address = Pubkey::new_unique();
         let segment_number = 0;
@@ -610,13 +609,13 @@ mod tests {
 
         assert_eq!(store.get_tape_number(&tape1_address)?, tape1_number);
         assert_eq!(store.get_tape_address(tape1_number)?, tape1_address);
-        let tape1_segments = store.get_tape_segments(tape1_number)?;
+        let tape1_segments = store.get_tape_segments(&tape1_address)?;
         assert_eq!(tape1_segments.len(), 1);
         assert_eq!(tape1_segments[0], (0, vec![1, 2, 3]));
 
         assert_eq!(store.get_tape_number(&tape2_address)?, tape2_number);
         assert_eq!(store.get_tape_address(tape2_number)?, tape2_address);
-        let tape2_segments = store.get_tape_segments(tape2_number)?;
+        let tape2_segments = store.get_tape_segments(&tape2_address)?;
         assert_eq!(tape2_segments.len(), 1);
         assert_eq!(tape2_segments[0], (0, vec![4, 5, 6]));
 
@@ -646,6 +645,9 @@ mod tests {
         let (store, _temp_dir) = setup_store()?;
         let tape_number = 1;
         let segment_number = 0;
+        let address = Pubkey::new_unique();
+
+        store.add_tape(tape_number, &address)?;
 
         let result = store.get_segment(tape_number, segment_number);
         assert!(matches!(result, Err(StoreError::SegmentNotFound(_, s)) if s == segment_number));

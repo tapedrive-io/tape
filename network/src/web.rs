@@ -220,10 +220,10 @@ pub fn rpc_get_segment(store: &TapeStore, params: &Value) -> Result<Value, RpcEr
         })
 }
 
-/// Retrieve all segments and their data for a given tape number.
+/// Retrieve all segments and their data for a given tape address.
 ///
 /// Parameters:
-/// - `tape_number`: Numeric ID of the tape.
+/// - `tape_address`: Base-58 pubkey identifying the tape.
 ///
 /// Returns a JSON array of objects `[{ segment_number, data }]`, where `data` is Base64.
 ///
@@ -232,19 +232,24 @@ pub fn rpc_get_segment(store: &TapeStore, params: &Value) -> Result<Value, RpcEr
 /// ```bash
 /// curl -X POST http://127.0.0.1:3000/api \
 ///      -H 'Content-Type: application/json' \
-///      -d '{"jsonrpc":"2.0","id":4,"method":"getTape","params":{"tape_number":1}}'
+///      -d '{"jsonrpc":"2.0","id":4,"method":"getTape","params":{"tape_address":"<PUBKEY>"}}'
 /// ```
 pub fn rpc_get_tape(store: &TapeStore, params: &Value) -> Result<Value, RpcError> {
-    let tn = params
-        .get("tape_number")
-        .and_then(Value::as_u64)
+    let addr = params
+        .get("tape_address")
+        .and_then(Value::as_str)
         .ok_or(RpcError {
             code: ErrorCode::InvalidParams.code(),
-            message: "invalid or missing tape_number".into(),
+            message: "invalid or missing tape_address".into(),
         })?;
 
-    let segments = store.get_tape_segments(tn).map_err(|e| match e {
-        StoreError::TapeNotFound(_) => RpcError {
+    let pk = Pubkey::from_str(addr).map_err(|e| RpcError {
+        code: ErrorCode::InvalidParams.code(),
+        message: format!("invalid pubkey: {}", e),
+    })?;
+
+    let segments = store.get_tape_segments(&pk).map_err(|e| match e {
+        StoreError::TapeNotFoundForAddress(_) => RpcError {
             code: ErrorCode::ServerError.code(),
             message: "tape not found".into(),
         },
