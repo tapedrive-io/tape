@@ -10,17 +10,13 @@ use crate::{
     utils::*,
 };
 
-/// Writes a chunk of data to an unlinked tape, returning the signature and the estimated 
-/// segment count.
 pub async fn write_to_tape(
     client: &RpcClient,
     signer: &Keypair,
     tape_address: Pubkey,
     writer_address: Pubkey,
     data: &[u8],
-) -> Result<(Signature, usize)> {
-
-    let segment_count = (data.len() + SEGMENT_SIZE - 1) / SEGMENT_SIZE;
+) -> Result<Signature> {
 
     let instruction = build_write_ix(
         signer.pubkey(),
@@ -29,8 +25,6 @@ pub async fn write_to_tape(
         data,
     );
 
-    let signature = send_with_retry(client, &instruction, signer, MAX_RETRIES).await?;
-
-    Ok((signature, segment_count))
+    Ok(send_with_retry(client, &instruction, signer, MAX_RETRIES).await?)
 }
 

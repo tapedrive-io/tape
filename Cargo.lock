@@ -6625,6 +6625,7 @@ dependencies = [
  "indicatif",
  "mime",
  "mime_guess",
+ "num_enum",
  "reqwest 0.12.15",
  "serde_json",
  "solana-client",
