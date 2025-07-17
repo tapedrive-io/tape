@@ -69,6 +69,7 @@ mime_guess = "2.0"
 # network-specific
 futures = "0.3"
 rocksdb = "0.23.0"
+tempdir = "0.3"
 
 [patch.crates-io]
 

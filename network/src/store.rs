@@ -1,6 +1,7 @@
 use num_cpus;
 use std::env;
 use std::path::Path;
+use std::fs;
 use rocksdb::{
     BlockBasedOptions, ColumnFamilyDescriptor, DBCompressionType, Options,
     PlainTableFactoryOptions, SliceTransform, WriteBatch, DB,
@@ -46,7 +47,14 @@ pub enum StoreError {
 }
 
 pub struct TapeStore {
-    db: DB,
+    pub db: DB,
+}
+
+#[derive(Debug)]
+pub struct LocalStats {
+    pub tapes: usize,
+    pub segments: usize,
+    pub size_bytes: u64,
 }
 
 impl TapeStore {
@@ -365,6 +373,42 @@ impl TapeStore {
             slot_bytes.try_into().map_err(|_| StoreError::InvalidSegmentKey)?,
         ))
     }
+
+    pub fn get_local_stats(&self) -> Result<LocalStats, StoreError> {
+        let tapes = self.count_tapes()?;
+        let segments = self.count_segments()?;
+        let size_bytes = self.db_size()?;
+        Ok(LocalStats { tapes, segments, size_bytes })
+    }
+
+    fn count_tapes(&self) -> Result<usize, StoreError> {
+        let cf = self
+            .db
+            .cf_handle("tape_by_number")
+            .ok_or(StoreError::TapeByNumberCfNotFound)?;
+        let iter = self.db.iterator_cf(cf, rocksdb::IteratorMode::Start);
+        Ok(iter.count())
+    }
+
+    fn count_segments(&self) -> Result<usize, StoreError> {
+        let cf = self
+            .db
+            .cf_handle("segments")
+            .ok_or(StoreError::SegmentsCfNotFound)?;
+        let iter = self.db.iterator_cf(cf, rocksdb::IteratorMode::Start);
+        Ok(iter.count())
+    }
+
+    fn db_size(&self) -> Result<u64, StoreError> {
+        let mut size = 0u64;
+        for entry in fs::read_dir(self.db.path())? {
+            let entry = entry?;
+            if entry.file_type()?.is_file() {
+                size += entry.metadata()?.len();
+            }
+        }
+        Ok(size)
+    }
 }
 
 impl Drop for TapeStore {
@@ -674,6 +718,27 @@ mod tests {
 
         let retrieved_data_2 = store.get_segment(tape_number, 1)?;
         assert_eq!(retrieved_data_2, segment_data_2);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_get_local_stats() -> Result<(), StoreError> {
+        let (store, _temp_dir) = setup_store()?;
+        let stats = store.get_local_stats()?;
+        assert_eq!(stats.tapes, 0);
+        assert_eq!(stats.segments, 0);
+
+        let tape_number = 1;
+        let address = Pubkey::new_unique();
+        store.add_tape(tape_number, &address)?;
+        store.add_segment(&address, 0, vec![1, 2, 3])?;
+        store.add_segment(&address, 1, vec![4, 5, 6])?;
+
+        let stats = store.get_local_stats()?;
+        assert_eq!(stats.tapes, 1);
+        assert_eq!(stats.segments, 2);
+        assert!(stats.size_bytes > 0);
 
         Ok(())
     }

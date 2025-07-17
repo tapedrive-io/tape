@@ -6,7 +6,8 @@ use std::path::PathBuf;
 #[command(
     name = "tapedrive",
     about = "Your data, permanently recorded — uncensorable, uneditable, and here for good.",
-    arg_required_else_help = true
+    arg_required_else_help = true,
+    version = env!("CARGO_PKG_VERSION")
 )]
 pub struct Cli {
     #[command(subcommand)]
@@ -33,6 +34,14 @@ pub enum Commands {
 
     // Tape Commands
 
+    Read {
+        #[arg(help = "Tape account to read")]
+        tape: String,
+
+        #[arg(short = 'o', long = "output", help = "Output file")]
+        output: Option<String>,
+    },
+
     Write {
         #[arg(
             help = "File to write, message text, or remote URL",
@@ -51,16 +60,13 @@ pub enum Commands {
         tape_name: Option<String>,
     },
 
-    Read {
-        #[arg(help = "Tape account to read")]
-        tape: String,
-
-        #[arg(short = 'o', long = "output", help = "Output file")]
-        output: Option<String>,
-    },
 
     // Miner Commands
 
+    Register {
+        #[arg(help = "The name of the miner you're registering")]
+        name: String,
+    },
     Claim {
         #[arg(help = "Miner account public key")]
         miner: String,
@@ -69,7 +75,7 @@ pub enum Commands {
         amount: u64,
     },
 
-    // Network Commands
+    // Node Commands
 
     Archive {
         #[arg(help = "Starting slot to archive from, defaults to the latest slot")]
@@ -85,10 +91,6 @@ pub enum Commands {
         #[arg(help = "Name of the miner you're mining with", conflicts_with = "pubkey", short = 'n', long = "name")]
         name: Option<String>,
     },
-    Register {
-        #[arg(help = "The name of the miner you're registering")]
-        name: String,
-    },
     Web {
         #[arg(help = "Port to run the web RPC service on")]
         port: Option<u16>,
@@ -99,12 +101,41 @@ pub enum Commands {
     #[command(hide = true)]
     Initialize {},
 
-    #[command(hide = true)]
-    Epoch {},
+    // Store Management Commands
 
-    // Misc Commands
+    #[command(subcommand)]
+    Store(StoreCommands),
 
-    GetTape {
+    // Info Commands
+
+    #[command(subcommand)]
+    Info(InfoCommands),
+
+}
+
+#[derive(Subcommand)]
+pub enum StoreCommands {
+    Stats {},
+
+    Resync {
+        #[arg(help = "Tape account public key to re-sync")]
+        tape: String,
+    },
+
+    CreateSnapshot {
+        #[arg(help = "Output path for the snapshot file (defaults to a timestamped file in current directory)")]
+        output: Option<String>,
+    },
+
+    LoadSnapshot {
+        #[arg(help = "Path to the snapshot file to load")]
+        input: String,
+    }
+}
+
+#[derive(Subcommand)]
+pub enum InfoCommands {
+    Tape {
         #[arg(help = "Tape account public key")]
         pubkey: String,
     },
@@ -112,15 +143,14 @@ pub enum Commands {
         #[arg(help = "Tape number to find")]
         number: u64,
     },
-    GetMiner {
+    Miner {
         #[arg(help = "Miner account public key")]
         pubkey: String,
     },
 
-    GetArchive {},
-    GetEpoch {},
-    GetBlock {},
-
+    Archive {},
+    Epoch {},
+    Block {},
 }
 
 #[derive(Debug, Clone)]

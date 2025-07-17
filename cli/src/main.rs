@@ -10,11 +10,11 @@ use solana_sdk::commitment_config::CommitmentConfig;
 
 use cli::{Cli, Commands};
 use keypair::{ get_payer, get_keypair_path };
-use commands::{admin, read, write, misc, network, claim};
+use commands::{admin, read, write, info, store, network, claim};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    log::print_title("⊙⊙ TAPEDRIVE");
+    log::print_title(format!("⊙⊙ TAPEDRIVE {}", env!("CARGO_PKG_VERSION")).as_str());
 
     let cli = Cli::parse();
     let rpc_url = cli.cluster.rpc_url();
@@ -22,8 +22,7 @@ async fn main() -> Result<()> {
     let keypair_path = get_keypair_path(cli.keypair_path.clone());
 
     match cli.command {
-        Commands::Initialize { .. } |
-        Commands::Epoch { .. } |
+        Commands::Initialize {} |
         Commands::Write { .. } | 
         Commands::Register { .. } |
         Commands::Mine { .. }
@@ -41,8 +40,7 @@ async fn main() -> Result<()> {
     match cli.command {
         // Admin Commands
 
-        Commands::Initialize { .. } | 
-        Commands::Epoch { .. } => {
+        Commands::Initialize { .. } => {
             let payer = get_payer(keypair_path)?;
             admin::handle_admin_commands(cli, rpc_client, payer).await?;
         }
@@ -59,6 +57,7 @@ async fn main() -> Result<()> {
 
         // Miner Commands
 
+        Commands::Register { .. } |
         Commands::Claim { .. } => {
             let payer = get_payer(keypair_path)?;
             claim::handle_claim_command(cli, rpc_client, payer).await?;
@@ -66,7 +65,6 @@ async fn main() -> Result<()> {
 
         // Network Commands
 
-        Commands::Register { .. } |
         Commands::Web { .. } |
         Commands::Archive { .. } |
         Commands::Mine { .. } => {
@@ -74,10 +72,14 @@ async fn main() -> Result<()> {
             network::handle_network_commands(cli, rpc_client, payer).await?;
         }
 
-        // Miscellaneous Commands
+        // Info Commands
+        Commands::Info(_) => {
+            info::handle_info_commands(cli, rpc_client).await?;
+        }
 
-        _ => {
-            misc::handle_misc_commands(cli, rpc_client).await?;
+        // Store Commands
+        Commands::Store(_) => {
+            store::handle_store_commands(cli, rpc_client).await?;
         }
     }
 

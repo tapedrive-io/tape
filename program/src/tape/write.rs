@@ -6,7 +6,7 @@ pub fn process_write(accounts: &[AccountInfo<'_>], data: &[u8]) -> ProgramResult
     let [
         signer_info, 
         tape_info,
-        writer_info, 
+        writer_info,
     ] = accounts else {
         return Err(ProgramError::NotEnoughAccountKeys);
     };
@@ -37,6 +37,11 @@ pub fn process_write(accounts: &[AccountInfo<'_>], data: &[u8]) -> ProgramResult
         tape.state.eq(&u64::from(TapeState::Created)) ||
         tape.state.eq(&u64::from(TapeState::Writing)),
         TapeError::UnexpectedState,
+    )?;
+
+    check_condition(
+        tape.total_size as usize + data.len() <= MAX_TAPE_SIZE,
+        TapeError::TapeTooLong,
     )?;
 
     // Convert the data to a canonical segments of data 

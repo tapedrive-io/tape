@@ -113,9 +113,10 @@ pub fn unprefix_segments(data: Vec<u8>, data_length: usize) -> Result<Vec<u8>> {
     }
 
     if output.len() > data_length {
-        //return Err(anyhow!("Unprefixed data length does not match expected"));
-        
-        // trim the output to match the expected data_length
+        // TODO: this seems wrong... we should probably find a different solution, the issue is
+        // outside the decode_tape function, where we merged the segments into single vec<u8>,
+        // perhaps pass the segments array instead of merging and then truncating.
+
         output.truncate(data_length);
     }
 
