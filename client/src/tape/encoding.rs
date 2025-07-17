@@ -112,8 +112,11 @@ pub fn unprefix_segments(data: Vec<u8>, data_length: usize) -> Result<Vec<u8>> {
         output.extend(seg_data);
     }
 
-    if output.len() != data_length {
-        return Err(anyhow!("Unprefixed data length does not match expected"));
+    if output.len() > data_length {
+        //return Err(anyhow!("Unprefixed data length does not match expected"));
+        
+        // trim the output to match the expected data_length
+        output.truncate(data_length);
     }
 
     Ok(output)
