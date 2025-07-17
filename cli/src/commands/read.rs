@@ -12,7 +12,7 @@ use tokio::{task, time::Duration};
 use crate::cli::{Cli, Commands};
 use crate::log;
 use tape_client::{
-    decode_tape, get_tape_account, read_linked_chunk, TapeHeader
+    decode_tape, get_tape_account, read_from_tape, TapeHeader
 };
 
 pub async fn handle_read_command(cli: Cli, client: RpcClient) -> Result<()> {
@@ -21,6 +21,10 @@ pub async fn handle_read_command(cli: Cli, client: RpcClient) -> Result<()> {
             let tape_address = Pubkey::from_str(&tape)
                 .map_err(|_| anyhow::anyhow!("Invalid tape address: {}", tape))?;
 
+
+            log::print_message("todo");
+
+            /*
             log::print_message("Reading tape...");
             log::print_divider();
 
@@ -108,6 +112,7 @@ pub async fn handle_read_command(cli: Cli, client: RpcClient) -> Result<()> {
                 }
             }
             log::print_divider();
+            */
         }
         _ => {}
     }

@@ -1,7 +1,7 @@
 use anyhow::{Result, bail};
 use dialoguer::{theme::ColorfulTheme, Confirm};
 use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_sdk::signature::{Keypair, Signature};
+use solana_sdk::signature::Keypair;
 use chrono::Utc;
 use std::io::Read;
 use tokio::{task, time::Duration};
@@ -19,16 +19,13 @@ use tape_client::{
     TapeHeader,
     encode_tape,
     create_tape,
-    write_linked_chunk,
+    write_to_tape,
     finalize_tape,
-    get_tape_account,
 };
 
 use crate::cli::{Cli, Commands};
 use crate::log;
 
-const VERIFY_EVERY: usize       = 500;
-const WAIT_TIME: u64            = 32;
 const SEGMENTS_PER_TX: usize    = 7; // 7 x 128 = 896 bytes
 const SAFE_SIZE : usize         = SEGMENT_SIZE * SEGMENTS_PER_TX;
 
@@ -42,11 +39,11 @@ pub async fn handle_write_command(cli: Cli, client: RpcClient, payer: Keypair) -
         } => {
 
             let (data, source, mime) = process_input(filename, message, remote).await?;
-            let (mime_type, mime_str) = mime_to_type(&mime);
+            let mime_type = mime_to_type(&mime);
 
             let compression_algo = CompressionAlgo::Gzip;
             let encryption_algo  = EncryptionAlgo::None; // No encryption for now
-            let flags = TapeFlags::Linked;
+            let flags = TapeFlags::Prefixed;
 
             let mut header = TapeHeader::new(
                 mime_type, 
@@ -55,9 +52,7 @@ pub async fn handle_write_command(cli: Cli, client: RpcClient, payer: Keypair) -
                 flags 
             );
 
-            header.mime_str = mime_str;
-
-            let encoded = encode_tape(&data, &header)?;
+            let encoded = encode_tape(&data, &mut header)?;
             let chunks : Vec<_> = encoded
                 .chunks(SAFE_SIZE)
                 .map(|c| c.to_vec())
@@ -120,60 +115,23 @@ pub async fn handle_write_command(cli: Cli, client: RpcClient, payer: Keypair) -
 
             
             let mut i = 0;
-            let mut last_sig = Signature::default();
-            let mut expected_segments = 0;
-            let mut last_good_chunk = 0;
-            let mut last_good_segments = 0;
-            let mut last_good_sig = last_sig;
-
             while i < chunks.len() {
                 let chunk = &chunks[i];
-                let (new_sig, used) = write_linked_chunk(
+                write_to_tape(
                     &client, 
                     &payer, 
                     tape_address, 
                     writer_address, 
-                    last_sig, 
                     chunk
                 ).await?;
 
-                last_sig = new_sig;
-                expected_segments += used as usize;
-
                 i += 1;
                 pb.set_position(i as u64);
-
-                let is_checkpoint = i % VERIFY_EVERY == 0;
-                let is_last_write = i == chunks.len();
-
-                if is_checkpoint || is_last_write {
-                    pb.set_message("Verifying...");
-                    tokio::time::sleep(Duration::from_secs(WAIT_TIME)).await;
-
-                    let (acct, _) = get_tape_account(&client, &tape_address).await?;
-                    let onchain = acct.total_segments as usize;
-
-                    if onchain == expected_segments {
-                        last_good_chunk = i;
-                        last_good_segments = expected_segments;
-                        last_good_sig = last_sig;
-                    } else {
-                        log::print_info(&format!(
-                            "Verification failed at chunk {}; onchain {}, expected {}",
-                            i, onchain, expected_segments
-                        ));
-                        i = last_good_chunk;
-                        expected_segments = last_good_segments;
-                        last_sig = last_good_sig;
-                        pb.set_position(i as u64);
-                        log::print_message(&format!("Retrying from chunk {}", i));
-                    }
-
-                    pb.set_message("");
-                }
             }
 
-            header.tail_signature = last_sig.into();
+            pb.set_length(chunks.len() as u64);
+            pb.set_message("finalizing tape...");
+            tokio::time::sleep(Duration::from_secs(32)).await;
 
             // Finalize the tape (prevents further writes and reclaims sol)
             finalize_tape(
@@ -199,80 +157,6 @@ pub async fn handle_write_command(cli: Cli, client: RpcClient, payer: Keypair) -
             log::print_title(&format!("tapedrive read {}", tape_address));
             log::print_divider();
 
-            //let mut expected_segments = 0usize;
-            //let mut last_good_chunk = 0usize;
-            //let mut last_good_segments = 0usize;
-            //let mut last_good_sig = last_sig;
-            //let mut i = 0usize;
-            //
-            //while i < chunks.len() {
-            //    let chunk = &chunks[i];
-            //    let (new_sig, used) = tapedrive::write_tape(
-            //        &client, 
-            //        &payer, 
-            //        tape_address, 
-            //        writer_address, 
-            //        last_sig, 
-            //        chunk
-            //    ).await?;
-            //
-            //    last_sig = new_sig;
-            //    expected_segments += used as usize;
-            //
-            //    i += 1;
-            //    pb.set_position(i as u64);
-            //
-            //    let is_checkpoint = i % VERIFY_EVERY == 0 || i == chunks.len();
-            //    if should_verify && is_checkpoint {
-            //        pb.set_message("Verifying...");
-            //        tokio::time::sleep(Duration::from_secs(WAIT_TIME)).await;
-            //
-            //        let (acct, _) = tapedrive::get_tape_account(&client, &tape_address).await?;
-            //        let onchain = acct.total_segments as usize;
-            //
-            //        if onchain == expected_segments {
-            //            last_good_chunk = i;
-            //            last_good_segments = expected_segments;
-            //            last_good_sig = last_sig;
-            //        } else {
-            //            log::print_info(&format!(
-            //                "Verification failed at chunk {}; onchain {}, expected {}",
-            //                i, onchain, expected_segments
-            //            ));
-            //            i = last_good_chunk;
-            //            expected_segments = last_good_segments;
-            //            last_sig = last_good_sig;
-            //            pb.set_position(i as u64);
-            //            log::print_message(&format!("Retrying from chunk {}", i));
-            //        }
-            //
-            //        pb.set_message("");
-            //    }
-            //}
-            //
-            //// Finalize the tape (prevents further writes and reclaims sol)
-            //tapedrive::finalize_tape(
-            //    &client,
-            //    &payer,
-            //    tape_address,
-            //    writer_address,
-            //    last_sig,
-            //).await?;
-            //
-            //pb.finish_with_message("");
-            //log::print_divider();
-            //
-            //if cli.verbose {
-            //    log::print_divider();
-            //    log::print_section_header("Metadata");
-            //    log::print_count(&format!("Tape Address: {}", tape_address));
-            //    log::print_count(&format!("Total Chunks: {}", chunks.len()));
-            //}
-            //
-            //log::print_divider();
-            //log::print_info("To read the tape, run:");
-            //log::print_title(&format!("tapedrive read {}", tape_address));
-            //log::print_divider();
         }
         _ => {}
     }
@@ -369,21 +253,12 @@ fn default_octet() -> Mime {
     "application/octet-stream".parse().unwrap()
 }
 
-/// Given a `Mime`, return:
-/// - the `u8` code for a matching `MimeType` variant, or `MimeType::Custom as u8` if none match,
-/// - plus a `[u8; NAME_LEN]` buffer containing either all zeros (for known types),
-///   or a null‐padded ASCII‐lowercase copy of the full MIME string (for Custom).
-fn mime_to_type(mime: &Mime) -> (MimeType, [u8; NAME_LEN]) {
-
-    let empty = [0u8; NAME_LEN];
+fn mime_to_type(mime: &Mime) -> MimeType {
     let (t, s) = (mime.type_().as_str(), mime.subtype().as_str());
     let t = t.to_ascii_lowercase();
     let s = s.to_ascii_lowercase();
 
-    let code: MimeType = match (t.as_str(), s.as_str()) {
-        // Unknown or octet-stream -> keep Unknown (0)
-        ("application", "octet-stream") => MimeType::Unknown,
-
+    match (t.as_str(), s.as_str()) {
         // Image formats
         ("image", "png") => MimeType::ImagePng,
         ("image", "jpeg") | ("image", "jpg") => MimeType::ImageJpeg,
@@ -436,13 +311,6 @@ fn mime_to_type(mime: &Mime) -> (MimeType, [u8; NAME_LEN]) {
         ("application", "sql") => MimeType::ApplicationSql,
         ("application", "x-yaml") | ("text", "yaml") => MimeType::ApplicationYaml,
 
-        // Everything else -> mark as Custom
-        _ => {
-            let full_mime = mime.as_ref().to_ascii_lowercase();
-            let mime_str = to_name(&full_mime);
-            return (MimeType::Custom, mime_str);
-        }
-    };
-
-    (code, empty)
+        _ => MimeType::Unknown
+    }
 }

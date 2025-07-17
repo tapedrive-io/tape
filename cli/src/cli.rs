@@ -116,12 +116,10 @@ pub enum Commands {
         #[arg(help = "Miner account public key")]
         pubkey: String,
     },
-    GetSpool {
-        #[arg(help = "Spool account public key")]
-        number: u8,
-    },
-    GetArchive { },
+
+    GetArchive {},
     GetEpoch {},
+    GetBlock {},
 
 }
 
