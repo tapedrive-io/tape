@@ -83,20 +83,20 @@ pub fn process_block(block: UiConfirmedBlock, slot: u64) -> Result<ProcessedBloc
         process_transaction(&tx, &mut tape_block)?;
     }
 
-    let (num_writes, num_updates, num_finalize) = verify_counts(&tape_block)?;
+    let (_num_writes, _num_updates, _num_finalize) = verify_counts(&tape_block)?;
     let (tapes, writes) = merge_events_and_instructions(&tape_block)?;
 
-    if !(tapes.is_empty() && writes.is_empty()) {
-        println!(
-            "DEBUG: TapeBlock {}: {} write, {} update, {} finalize, {} tapes, {} writes",
-            slot,
-            num_writes,
-            num_updates,
-            num_finalize,
-            tapes.len(),
-            writes.len()
-        );
-    }
+    // if !(tapes.is_empty() && writes.is_empty()) {
+    //     println!(
+    //         "DEBUG: TapeBlock {}: {} write, {} update, {} finalize, {} tapes, {} writes",
+    //         slot,
+    //         num_writes,
+    //         num_updates,
+    //         num_finalize,
+    //         tapes.len(),
+    //         writes.len()
+    //     );
+    // }
 
     Ok(ProcessedBlock {
         slot,

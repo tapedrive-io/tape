@@ -13,7 +13,7 @@ use crate::cli::{Cli, Commands};
 use crate::log;
 use tape_client::{
     read_from_block,
-    decode_tape, get_tape_account, read_from_tape, TapeHeader
+    decode_tape, get_tape_account, TapeHeader
 };
 
 pub async fn handle_read_command(cli: Cli, client: RpcClient) -> Result<()> {
@@ -73,36 +73,6 @@ pub async fn handle_read_command(cli: Cli, client: RpcClient) -> Result<()> {
             }
             log::print_divider();
 
-            // // Process data
-            // pb.set_style(
-            //     ProgressStyle::default_spinner()
-            //         .template("{spinner:.green} {wide_msg}")
-            //         .expect("Failed to set progress style"),
-            // );
-            // pb.set_message("Verifying and decompressing data...");
-            //
-            // let result = decode_tape(data, &header)?;
-            //
-            // pb.finish_with_message("");
-            // log::print_divider();
-            // if cli.verbose {
-            //     log::print_section_header("Metadata");
-            //     log::print_count(&format!("Size: {} bytes", result.len()));
-            //     log::print_divider();
-            // }
-            //
-            // // Write output
-            // match output {
-            //     Some(filename) => {
-            //         fs::write(&filename, result)?;
-            //         log::print_message(&format!("Wrote output to: {}", filename));
-            //     }
-            //     None => {
-            //         io::stdout().write_all(&result)?;
-            //         io::stdout().flush()?;
-            //     }
-            // }
-            // log::print_divider();
         }
         _ => {}
     }

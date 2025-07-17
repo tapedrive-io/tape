@@ -1,11 +1,13 @@
 use anyhow::{Result, bail};
 use dialoguer::{theme::ColorfulTheme, Confirm};
 use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_sdk::signature::Keypair;
+use solana_sdk::signature::{Keypair, Signature};
 use chrono::Utc;
 use std::io::Read;
 use tokio::{task, time::Duration};
 use indicatif::{ProgressBar, ProgressStyle};
+use std::sync::Arc;
+use tokio::sync::Semaphore;
 
 use mime::Mime;
 use mime_guess::MimeGuess;
@@ -28,6 +30,8 @@ use crate::log;
 
 const SEGMENTS_PER_TX: usize    = 7; // 7 x 128 = 896 bytes
 const SAFE_SIZE : usize         = SEGMENT_SIZE * SEGMENTS_PER_TX;
+
+const MAX_CONCURRENT: usize = 10;
 
 pub async fn handle_write_command(cli: Cli, client: RpcClient, payer: Keypair) -> Result<()> {
     match cli.command {
@@ -100,6 +104,9 @@ pub async fn handle_write_command(cli: Cli, client: RpcClient, payer: Keypair) -
                 }
             });
 
+            let client = Arc::new(client);
+            let payer = Arc::new(payer);
+
             // Create the tape
             pb.set_message("Creating new tape (please wait)...");
             let (tape_address, writer_address, _sig) =
@@ -113,32 +120,33 @@ pub async fn handle_write_command(cli: Cli, client: RpcClient, payer: Keypair) -
                     .expect("Failed to set progress style"),
             );
 
-            
-            let mut i = 0;
-            while i < chunks.len() {
-                let chunk = &chunks[i];
+            let semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT));
 
-                let (sig, count) = write_to_tape(
-                    &client, 
-                    &payer, 
-                    tape_address, 
-                    writer_address, 
-                    chunk
-                ).await?;
-
-                println!(
-                    "Chunk {} written, signature: {}, segments: {}, size: {} bytes",
-                    i + 1,
-                    sig,
-                    count,
-                    chunk.len()
-                );
-
-                i += 1;
-                pb.set_position(i as u64);
+            let mut handles = Vec::with_capacity(chunks.len());
+            for chunk in chunks.clone() {
+                let client_clone = client.clone();
+                let payer_clone = payer.clone();
+                let pb_clone = pb.clone();
+                let semaphore_clone = semaphore.clone();
+                let handle: task::JoinHandle<Result<(Signature, usize)>> = task::spawn(async move {
+                    let _permit = semaphore_clone.acquire().await.unwrap();
+                    let (sig, count) = write_to_tape(
+                        &client_clone,
+                        &payer_clone,
+                        tape_address,
+                        writer_address,
+                        &chunk
+                    ).await?;
+                    pb_clone.inc(1);
+                    Ok((sig, count))
+                });
+                handles.push(handle);
             }
 
-            pb.set_length(chunks.len() as u64);
+            for handle in handles {
+                let _ = handle.await??;
+            }
+
             pb.set_message("finalizing tape...");
             tokio::time::sleep(Duration::from_secs(32)).await;
 
