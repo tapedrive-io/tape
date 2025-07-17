@@ -117,13 +117,22 @@ pub async fn handle_write_command(cli: Cli, client: RpcClient, payer: Keypair) -
             let mut i = 0;
             while i < chunks.len() {
                 let chunk = &chunks[i];
-                write_to_tape(
+
+                let (sig, count) = write_to_tape(
                     &client, 
                     &payer, 
                     tape_address, 
                     writer_address, 
                     chunk
                 ).await?;
+
+                println!(
+                    "Chunk {} written, signature: {}, segments: {}, size: {} bytes",
+                    i + 1,
+                    sig,
+                    count,
+                    chunk.len()
+                );
 
                 i += 1;
                 pb.set_position(i as u64);

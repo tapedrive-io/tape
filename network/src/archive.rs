@@ -4,11 +4,11 @@ use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::pubkey::Pubkey;
 use tokio::time::{sleep, Duration};
 use tape_client::{get_slot, get_blocks_with_limit, get_block_by_number, get_archive_account};
+use tape_client::utils::{process_block, ProcessedBlock};
 use reqwest::Client as HttpClient;
 use serde_json::json;
 use base64::decode;
 
-use super::block::{process_block, ProcessedBlock};
 use super::store::TapeStore;
 
 /// Archive loop that continuously fetches and processes blocks from the Solana network.
@@ -105,9 +105,10 @@ fn archive_block(store: &TapeStore, block: &ProcessedBlock) -> Result<()> {
         store.add_tape(*number, address)?;
     }
 
-    for ((tape, segment), data) in &block.writes {
+    for ((tape, segment, _parent), data) in &block.writes {
         store.add_segment(tape, *segment, data.clone())?;
         store.add_slot(tape, *segment, block.slot)?;
+        //store.add_slot(tape, *segment, parent)?;
     }
 
     Ok(())

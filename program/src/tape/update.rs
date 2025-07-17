@@ -58,7 +58,7 @@ pub fn process_update(accounts: &[AccountInfo<'_>], data: &[u8]) -> ProgramResul
 
     let new_leaf = Leaf::new(&[
         segment_number.as_ref(), // u64_le_bytes
-        current_slot.to_le_bytes().as_ref(),   // u64_le_bytes
+        current_slot.to_le_bytes().as_ref(), // u64_le_bytes
         args.new_data.as_ref(),
     ]);
 
@@ -74,7 +74,7 @@ pub fn process_update(accounts: &[AccountInfo<'_>], data: &[u8]) -> ProgramResul
 
     UpdateEvent {
         segment_number: u64::from_le_bytes(segment_number),
-        segment_slot: u64::from_le_bytes(segment_slot),
+        old_slot: u64::from_le_bytes(segment_slot),
         address: tape_address.to_bytes(),
     }
     .log();

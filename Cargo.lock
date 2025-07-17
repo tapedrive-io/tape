@@ -6527,6 +6527,7 @@ dependencies = [
  "spl-token 4.0.2",
  "steel",
  "tape-api",
+ "thiserror 2.0.12",
  "tokio",
 ]
 

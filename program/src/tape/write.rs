@@ -57,6 +57,8 @@ pub fn process_write(accounts: &[AccountInfo<'_>], data: &[u8]) -> ProgramResult
         )?;
     }
 
+    let prev_slot = tape.tail_slot;
+
     tape.total_segments   += segment_count;
     tape.total_size       += data.len() as u64;
     tape.merkle_root       = writer.state.get_root().to_bytes();
@@ -64,6 +66,7 @@ pub fn process_write(accounts: &[AccountInfo<'_>], data: &[u8]) -> ProgramResult
     tape.tail_slot         = current_slot;
 
     WriteEvent {
+        prev_slot,
         num_added: segment_count,
         num_total: tape.total_segments,
         address: tape_address.to_bytes(),

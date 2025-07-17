@@ -72,7 +72,7 @@ pub struct TapeBlock {
 pub struct ProcessedBlock {
     pub slot: u64,
     pub tapes: HashMap<Pubkey, u64>,
-    pub writes: HashMap<(Pubkey, u64), Vec<u8>>,
+    pub writes: HashMap<(Pubkey, u64, u64), Vec<u8>>,
 }
 
 pub fn process_block(block: UiConfirmedBlock, slot: u64) -> Result<ProcessedBlock, BlockError> {
@@ -153,7 +153,7 @@ fn verify_counts(tape_block: &TapeBlock) -> Result<(u64, u64, u64), BlockError> 
 
 fn merge_events_and_instructions(
     tape_block: &TapeBlock,
-) -> Result<(HashMap<Pubkey, u64>, HashMap<(Pubkey, u64), Vec<u8>>), BlockError> {
+) -> Result<(HashMap<Pubkey, u64>, HashMap<(Pubkey, u64, u64), Vec<u8>>), BlockError> {
     if tape_block.events.len() != tape_block.instructions.len() {
         return Err(BlockError::CountMismatch("events and instructions"));
     }
@@ -183,7 +183,7 @@ fn merge_events_and_instructions(
 
                 for (i, segment) in segments.into_iter().enumerate() {
                     let segment_number = base + i as u64;
-                    writes.insert((*address, segment_number), segment.to_vec());
+                    writes.insert((*address, segment_number, write_event.prev_slot), segment.to_vec());
                 }
             }
 
@@ -199,7 +199,7 @@ fn merge_events_and_instructions(
                 println!("DEBUG: updating segment {} of tape {}", segment_number, address);
 
                 // Record the “new_data”, effectively overwriting that segment:
-                writes.insert((*address, *segment_number), new_data.to_vec());
+                writes.insert((*address, *segment_number, update_event.old_slot), new_data.to_vec());
 
                 // (optional) verify old_data + proof
             }
@@ -411,7 +411,7 @@ fn process_instruction(
     match ix_type {
         InstructionType::Write => Ok(Some(TapeInstruction::Write {
             address: tape_address,
-            data: ix_data,
+            data: ix_data[1..].to_vec(),
         })),
         InstructionType::Update => {
             Update::try_from_bytes(&ix_data[1..])

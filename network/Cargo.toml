@@ -37,7 +37,7 @@ solana-sdk.workspace = true
 solana-transaction-status.workspace = true
 solana-account-decoder.workspace = true
 solana-transaction-status-client-types.workspace = true
-thiserror = "2.0.12"
+thiserror.workspace = true
 axum = "0.8.4"
 num_cpus = "1.17.0"
 
