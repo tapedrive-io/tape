@@ -88,21 +88,23 @@ async fn try_mine_iteration(
             tape.total_segments
         );
 
+        // Find the slot for the segment
+        let segment_slot = store.get_slot(tape_number, segment_number)?;
+
+        // Get the entire tape
         let segments = store.get_tape_segments(&tape_address)?;
         if segments.len() != tape.total_segments as usize {
             return Err(anyhow!("Local store is missing some segments for tape number {}: expected {}, got {}", 
                 tape_address, tape.total_segments, segments.len()));
         }
 
-        let recall_slot = store.get_slot(tape_number, segment_number)?;
-
-        println!("DEBUG: Recall tape {}, segment {}, slot: {:?}", tape_number, segment_number, recall_slot);
+        println!("DEBUG: Recall tape {}, segment {}, slot: {:?}", tape_number, segment_number, segment_slot);
 
         let (solution, recall_segment, merkle_proof) = 
             compute_challenge_solution(
                 &tape,
                 &miner_challenge,
-                recall_slot,
+                segment_slot,
                 segment_number,
                 segments,
                 epoch.target_difficulty,
@@ -114,7 +116,7 @@ async fn try_mine_iteration(
             *miner_address, 
             tape_address, 
             solution, 
-            recall_slot,
+            segment_slot,
             recall_segment, 
             merkle_proof,
         ).await?;
@@ -138,9 +140,9 @@ fn compute_challenge_solution(
     segments: Vec<(u64, Vec<u8>)>,
     epoch_difficulty: u64,
 ) -> Result<(Solution, [u8; SEGMENT_SIZE], [[u8; 32]; TREE_HEIGHT])> {
+
     let mut leaves = Vec::new();
     let mut recall_segment = [0; SEGMENT_SIZE];
-
     let mut merkle_tree = MerkleTree::<{TREE_HEIGHT}>::new(&[tape.merkle_seed.as_ref()]);
 
     for (segment_id, segment_data) in segments.iter() {

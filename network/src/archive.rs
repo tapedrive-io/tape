@@ -182,10 +182,10 @@ pub async fn sync_from_block(
             }
 
             store.add_segment(&key.address, key.segment_number, data.clone())?;
-            store.add_slot(&key.address, key.segment_number, current_slot)?;
+            store.add_slot(&key.address, key.segment_number, processed.slot)?;
 
             if key.prev_slot != 0 {
-                if key.prev_slot > current_slot {
+                if key.prev_slot > processed.slot {
                     return Err(anyhow!("Parent slot must be earlier than current slot"));
                 }
 
