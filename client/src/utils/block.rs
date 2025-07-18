@@ -44,7 +44,7 @@ pub enum BlockError {
 pub struct SegmentKey {
     pub address: Pubkey,
     pub segment_number: u64,
-    pub slot: u64,
+    pub prev_slot: u64,
 }
 
 // Pulled out of logs
@@ -125,7 +125,7 @@ fn verify_counts(tape_block: &TapeBlock) -> Result<(), BlockError> {
         }
     }
 
-    println!("[Counts] Write: {}, Update: {}, Finalize: {}", write_events, update_events, finalize_events);
+    // println!("[Counts] Write: {}, Update: {}, Finalize: {}", write_events, update_events, finalize_events);
 
     if tape_block.events.len() != tape_block.instructions.len() {
         return Err(BlockError::CountMismatch(
@@ -205,10 +205,16 @@ fn merge_write(
 
     for (i, segment) in segments.into_iter().enumerate() {
         let segment_number = base + i as u64;
+        // check the le u64 bytes of every segment against the segment number
+        // let encoded_number = u64::from_le_bytes(segment[0..8].try_into().unwrap());
+        // if encoded_number != segment_number {
+        //     return Err(BlockError::InvalidData("Segment number mismatch in write event"));
+        // }
+
         let key = SegmentKey {
             address: *address,
             segment_number,
-            slot: write_event.prev_slot,
+            prev_slot: write_event.prev_slot,
         };
         merged.segment_writes.insert(key, segment.to_vec());
     }
@@ -234,7 +240,7 @@ fn merge_update(
     let key = SegmentKey {
         address: *address,
         segment_number,
-        slot: update_event.old_slot,
+        prev_slot: update_event.old_slot,
     };
 
     // Record the “new_data”, effectively overwriting that segment

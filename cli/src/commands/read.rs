@@ -8,7 +8,7 @@ use tokio::{task, time::Duration};
 
 use crate::cli::{Cli, Commands};
 use crate::log;
-use tape_client::{ MimeType, decode_tape, get_tape_account, read_from_block, TapeHeader};
+use tape_client::{ MimeType, decode_tape, get_tape_account, init_read, process_next_block, finalize_read, TapeHeader};
 
 pub async fn handle_read_command(cli: Cli, client: RpcClient) -> Result<()> {
     if let Commands::Read { tape, output } = cli.command {
@@ -33,12 +33,19 @@ pub async fn handle_read_command(cli: Cli, client: RpcClient) -> Result<()> {
         pb.set_position(0);
         pb.set_message("");
 
-        let data = read_from_block(&client, &tape_address, tape.tail_slot).await?;
+        let mut state = init_read(tape.tail_slot);
+
+        while process_next_block(&client, &tape_address, &mut state).await? {
+            pb.set_position(state.segments_len() as u64);
+        }
+
+        let data = finalize_read(state)?;
         let result = decode_tape(data, header)?;
 
         let mime_type_enum =
             MimeType::try_from_primitive(header.mime_type).unwrap_or(MimeType::Unknown);
 
+        pb.finish();
         write_output(output, &result, mime_type_enum)?;
         log::print_divider();
     }
@@ -73,6 +80,8 @@ fn write_output(output: Option<String>, data: &[u8], mime_type: MimeType) -> Res
                 }
             }
             fs::write(&filename, data)?;
+
+            log::print_divider();
             log::print_message(&format!("Wrote output to: {}", filename));
         }
         None => {

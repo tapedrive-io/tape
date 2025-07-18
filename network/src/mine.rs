@@ -17,13 +17,18 @@ use crankx::{
 
 use super::store::TapeStore;
 
+use std::sync::{Arc, mpsc::{channel, Sender, Receiver}};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread::{self, JoinHandle};
+use num_cpus;
+
 pub async fn mine_loop(
     store: &TapeStore, 
     client: &RpcClient, 
     miner_address: &Pubkey,
     signer: &Keypair,
 ) -> Result<()> {
-    let interval = Duration::from_secs(10);
+    let interval = Duration::from_secs(1);
 
     loop {
         match try_mine_iteration(store, client, miner_address, signer).await {
@@ -73,8 +78,6 @@ async fn try_mine_iteration(
 
     let tape_address = store.get_tape_address(tape_number);
 
-    println!("DEBUG: Tape address: {:?}", tape_address);
-
     if let Ok(tape_address) = tape_address {
         let tape = get_tape_account(client, &tape_address)
             .await
@@ -92,6 +95,8 @@ async fn try_mine_iteration(
         }
 
         let recall_slot = store.get_slot(tape_number, segment_number)?;
+
+        println!("DEBUG: Recall tape {}, segment {}, slot: {:?}", tape_number, segment_number, recall_slot);
 
         let (solution, recall_segment, merkle_proof) = 
             compute_challenge_solution(
@@ -197,15 +202,58 @@ fn solve_challenge<const N: usize>(
     data: &[u8; N],
     difficulty: u64,
 ) -> Result<Solution, CrankXError> {
-    let mut memory = SolverMemory::new();
-    let mut nonce: u64 = 0;
+    let num_threads = num_cpus::get();
+    let (tx, rx): (Sender<Solution>, Receiver<Solution>) = channel();
+    let found = Arc::new(AtomicBool::new(false));
+    let challenge_arc = Arc::new(challenge);
+    let data_arc = Arc::new(*data);
+    let mut handles: Vec<JoinHandle<()>> = Vec::with_capacity(num_threads);
 
-    loop {
-        if let Ok(solution) = solve_with_memory(&mut memory, &challenge, data, &nonce.to_le_bytes()) {
-            if solution.difficulty() >= difficulty as u32 {
-                return Ok(solution);
+    for i in 0..num_threads {
+        let tx_clone = tx.clone();
+        let found_clone = found.clone();
+        let challenge_clone = challenge_arc.clone();
+        let data_clone = data_arc.clone();
+
+        let handle = thread::spawn(move || {
+            let mut memory = SolverMemory::new();
+            let mut nonce: u64 = i as u64;
+
+            loop {
+                if found_clone.load(Ordering::Relaxed) {
+                    break;
+                }
+
+                if let Ok(solution) = solve_with_memory(
+                    &mut memory,
+                    &*challenge_clone,
+                    &*data_clone,
+                    &nonce.to_le_bytes(),
+                ) {
+                    if solution.difficulty() >= difficulty as u32 {
+                        found_clone.store(true, Ordering::Relaxed);
+                        let _ = tx_clone.send(solution);
+                        break;
+                    }
+                }
+                // If solve_with_memory returns Err, skip and continue, as in the original
+
+                nonce += num_threads as u64;
             }
-        }
-        nonce += 1;
+        });
+
+        handles.push(handle);
     }
+
+    let solution = rx.recv().map_err(|_| CrankXError::EquiXFailure)?;
+
+    // Ensure all threads stop
+    found.store(true, Ordering::Relaxed);
+
+    // Wait for all threads to finish
+    for handle in handles {
+        let _ = handle.join();
+    }
+
+    Ok(solution)
 }

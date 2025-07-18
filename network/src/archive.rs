@@ -105,8 +105,7 @@ fn archive_block(store: &TapeStore, block: &ProcessedBlock) -> Result<()> {
 
     for (key, data) in &block.segment_writes {
         store.add_segment(&key.address, key.segment_number, data.clone())?;
-        // Assuming add_slot stores the parent slot as per the comment in original code
-        store.add_slot(&key.address, key.segment_number, key.slot)?;
+        store.add_slot(&key.address, key.segment_number, block.slot)?;
     }
 
     Ok(())
@@ -136,6 +135,66 @@ async fn sync_with_trusted_peer(
 
         for (seg_num, data) in segments {
             store.add_segment(&tape_address, seg_num, data)?;
+        }
+    }
+
+    Ok(())
+}
+
+pub async fn sync_from_block(
+    store: &TapeStore,
+    client: &RpcClient,
+    tape_address: &Pubkey,
+    starting_slot: u64,
+) -> Result<()> {
+
+    let mut visited: HashSet<u64> = HashSet::new();
+    let mut stack: Vec<u64> = Vec::new();
+
+    stack.push(starting_slot);
+
+    while let Some(current_slot) = stack.pop() {
+        if !visited.insert(current_slot) {
+            continue; // Skip if already visited
+        }
+
+        let block = get_block_by_number(client, current_slot, TransactionDetails::Full).await?;
+        let processed = process_block(block, current_slot)?;
+
+        if processed.finalized_tapes.is_empty() && 
+           processed.segment_writes.is_empty() {
+               continue; // Skip empty blocks
+        }
+
+        for (address, number) in &processed.finalized_tapes {
+            if address != tape_address {
+                continue;
+            }
+
+            store.add_tape(*number, address)?;
+        }
+
+        let mut parents: HashSet<u64> = HashSet::new();
+
+        for (key, data) in &processed.segment_writes {
+            if key.address != *tape_address {
+                continue;
+            }
+
+            store.add_segment(&key.address, key.segment_number, data.clone())?;
+            store.add_slot(&key.address, key.segment_number, current_slot)?;
+
+            if key.prev_slot != 0 {
+                if key.prev_slot > current_slot {
+                    return Err(anyhow!("Parent slot must be earlier than current slot"));
+                }
+
+                parents.insert(key.prev_slot);
+            }
+        }
+
+        for parent in parents {
+            stack.push(parent);
         }
     }
 
@@ -199,66 +258,6 @@ async fn fetch_tape_segments(
     }
 
     Ok(result)
-}
-
-pub async fn sync_from_block(
-    store: &TapeStore,
-    client: &RpcClient,
-    tape_address: &Pubkey,
-    starting_slot: u64,
-) -> Result<()> {
-
-    let mut visited: HashSet<u64> = HashSet::new();
-    let mut stack: Vec<u64> = Vec::new();
-
-    stack.push(starting_slot);
-
-    while let Some(current_slot) = stack.pop() {
-        if !visited.insert(current_slot) {
-            continue; // Skip if already visited
-        }
-
-        let block = get_block_by_number(client, current_slot, TransactionDetails::Full).await?;
-        let processed = process_block(block, current_slot)?;
-
-        if processed.finalized_tapes.is_empty() && 
-           processed.segment_writes.is_empty() {
-               continue; // Skip empty blocks
-        }
-
-        for (address, number) in &processed.finalized_tapes {
-            if address != tape_address {
-                continue;
-            }
-
-            store.add_tape(*number, address)?;
-        }
-
-        let mut parents: HashSet<u64> = HashSet::new();
-
-        for (key, data) in &processed.segment_writes {
-            if key.address != *tape_address {
-                continue;
-            }
-
-            store.add_segment(&key.address, key.segment_number, data.clone())?;
-            store.add_slot(&key.address, key.segment_number, key.slot)?;
-
-            if key.slot != 0 {
-                if key.slot > current_slot {
-                    return Err(anyhow!("Parent slot must be earlier than current slot"));
-                }
-
-                parents.insert(key.slot);
-            }
-        }
-
-        for parent in parents {
-            stack.push(parent);
-        }
-    }
-
-    Ok(())
 }
 
 /// Prints the current drift status and updates health in the store.
