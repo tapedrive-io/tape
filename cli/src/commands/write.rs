@@ -6,7 +6,10 @@ use mime::Mime;
 use mime_guess::MimeGuess;
 use reqwest;
 use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_sdk::{signature::{Keypair, Signature}, pubkey::Pubkey};
+use solana_sdk::{
+    pubkey::Pubkey,
+    signature::{Keypair, Signature},
+};
 use std::io::Read;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
@@ -14,16 +17,16 @@ use tokio::{task, time::Duration};
 
 use tape_api::prelude::*;
 use tape_client::{
-    create_tape, encode_tape, finalize_tape, write_to_tape, CompressionAlgo,
-    EncryptionAlgo, MimeType, TapeFlags, TapeHeader,
+    create_tape, encode_tape, finalize_tape, write_to_tape, CompressionAlgo, EncryptionAlgo,
+    MimeType, TapeFlags, TapeHeader,
 };
 
 use crate::cli::{Cli, Commands};
 use crate::log;
 
 const SEGMENTS_PER_TX: usize = 7; // 7 x 128 = 896 bytes
-const SAFE_SIZE: usize       = SEGMENT_SIZE * SEGMENTS_PER_TX;
-const MAX_CONCURRENT: usize  = 10;
+const SAFE_SIZE: usize = SEGMENT_SIZE * SEGMENTS_PER_TX;
+const MAX_CONCURRENT: usize = 10;
 
 pub async fn handle_write_command(cli: Cli, client: RpcClient, payer: Keypair) -> Result<()> {
     if let Commands::Write {
@@ -33,7 +36,8 @@ pub async fn handle_write_command(cli: Cli, client: RpcClient, payer: Keypair) -
         ref tape_name,
     } = cli.command
     {
-        let (data, source, mime) = process_input(filename.clone(), message.clone(), remote.clone()).await?;
+        let (data, source, mime) =
+            process_input(filename.clone(), message.clone(), remote.clone()).await?;
         let mime_type = mime_to_type(&mime);
 
         let compression_algo = CompressionAlgo::Gzip;
@@ -46,9 +50,20 @@ pub async fn handle_write_command(cli: Cli, client: RpcClient, payer: Keypair) -
         let chunks: Vec<_> = encoded.chunks(SAFE_SIZE).map(|c| c.to_vec()).collect();
         let chunks_len = chunks.len();
 
-        let tape_name = tape_name.clone().unwrap_or_else(|| Utc::now().timestamp().to_string());
+        let tape_name = tape_name
+            .clone()
+            .unwrap_or_else(|| Utc::now().timestamp().to_string());
 
-        print_write_summary(&cli, &source, &tape_name, &mime, compression_algo, encryption_algo, flags, chunks_len);
+        print_write_summary(
+            &cli,
+            &source,
+            &tape_name,
+            &mime,
+            compression_algo,
+            encryption_algo,
+            flags,
+            chunks_len,
+        );
 
         if !confirm_proceed()? {
             log::print_error("Write operation cancelled");
@@ -61,16 +76,10 @@ pub async fn handle_write_command(cli: Cli, client: RpcClient, payer: Keypair) -
         let payer = Arc::new(payer);
 
         pb.set_message("Creating new tape (please wait)...");
-        let (tape_address, writer_address, _sig) = create_tape(&client, &payer, &tape_name, header).await?;
+        let (tape_address, writer_address, _sig) =
+            create_tape(&client, &payer, &tape_name, header).await?;
 
-        write_chunks(
-            &client,
-            &payer,
-            tape_address,
-            writer_address,
-            chunks,
-            &pb,
-        ).await?;
+        write_chunks(&client, &payer, tape_address, writer_address, chunks, &pb).await?;
 
         pb.set_message("finalizing tape...");
         tokio::time::sleep(Duration::from_secs(32)).await;
@@ -156,8 +165,7 @@ async fn write_chunks(
         let pb_clone = pb.clone();
         let semaphore_clone = semaphore.clone();
         let handle: task::JoinHandle<Result<Signature>> = task::spawn(async move {
-            let _ = semaphore_clone.acquire().await.unwrap();
-
+            let _permit = semaphore_clone.acquire().await?;
             let sig = write_to_tape(
                 &client_clone,
                 &payer_clone,
@@ -280,7 +288,9 @@ fn mime_to_type(mime: &Mime) -> MimeType {
         // Document formats
         ("application", "pdf") => MimeType::ApplicationPdf,
         ("application", "msword") => MimeType::ApplicationMsword,
-        ("application", "vnd.openxmlformats-officedocument.wordprocessingml.document") => MimeType::ApplicationDocx,
+        ("application", "vnd.openxmlformats-officedocument.wordprocessingml.document") => {
+            MimeType::ApplicationDocx
+        }
         ("application", "vnd.oasis.opendocument.text") => MimeType::ApplicationOdt,
 
         // Text formats

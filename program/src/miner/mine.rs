@@ -190,7 +190,7 @@ fn has_stalled(block: &Block, current_time: i64) -> bool {
 // needed to solve the challenge.
 #[inline(always)]
 fn update_miner_multiplier(miner: &mut Miner, block: &Block) {
-    if miner.last_proof_block == block.number {
+    if miner.last_proof_block.saturating_add(1) == block.number {
         miner.multiplier = miner.multiplier
             .saturating_add(1)
             .min(MAX_CONSISTENCY_MULTIPLIER);

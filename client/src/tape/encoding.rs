@@ -77,7 +77,7 @@ pub fn unprefix_segments(data: Vec<u8>, data_length: usize) -> Result<Vec<u8>> {
             return Err(anyhow!("Invalid segment size: too small"));
         }
 
-        println!("DEBUG: chunk {:?}", chunk);
+        // println!("DEBUG: chunk {:?}", chunk);
 
         let seg_num_bytes: [u8; 8] = chunk[0..8].try_into().map_err(|_| anyhow!("Failed to read segment number"))?;
         let seg_num = u64::from_be_bytes(seg_num_bytes);
