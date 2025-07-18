@@ -17,7 +17,6 @@ pub async fn perform_mining(
     miner_address: Pubkey,
     tape_address: Pubkey,
     solution: Solution,
-    recall_slot: u64,
     recall_segment: [u8; SEGMENT_SIZE],
     merkle_proof: [[u8; 32]; TREE_HEIGHT],
 ) -> Result<Signature> {
@@ -28,7 +27,6 @@ pub async fn perform_mining(
         miner_address,
         tape_address,
         solution,
-        recall_slot,
         recall_segment,
         merkle_proof,
     );

@@ -57,7 +57,6 @@ pub fn process_write(accounts: &[AccountInfo<'_>], data: &[u8]) -> ProgramResult
         write_segment(
             &mut writer.state,
             tape.total_segments + segment_number as u64,
-            current_slot,
             &canonical_segment,
         )?;
     }

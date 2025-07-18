@@ -24,7 +24,7 @@ use crankx::{
 
 struct StoredTape {
     pubkey: Pubkey,
-    segments: Vec<(Vec<u8>, u64)>,  // (segment_data, slot_number)
+    segments: Vec<Vec<u8>>,  // (segment_data, slot_number)
     account: Tape,
 }
 
@@ -91,7 +91,7 @@ fn run_integration() {
 
     // Compute challenge solution
     let stored_tape = &tape_db[(recall_tape - 1) as usize];
-    let (solution, recall_segment, recall_slot, merkle_proof) = 
+    let (solution, recall_segment, merkle_proof) = 
         compute_challenge_solution(stored_tape, &miner, &epoch, &block);
 
     // Perform mining
@@ -101,7 +101,6 @@ fn run_integration() {
         miner_address,
         stored_tape.pubkey,
         solution,
-        recall_slot,
         recall_segment,
         merkle_proof,
     );
@@ -318,11 +317,6 @@ fn write_tape(
         let res = send_tx(svm, tx);
         assert!(res.is_ok());
 
-        // Get the slot the transaction write was processed in
-        let account = svm.get_account(&tape_address).unwrap();
-        let tape = Tape::unpack(&account.data).unwrap();
-        let slot_number = tape.tail_slot;
-
         // Update local state
         let segments = data.chunks(SEGMENT_SIZE);
         for (segment_number, segment) in segments.enumerate() {
@@ -331,12 +325,11 @@ fn write_tape(
             assert!(write_segment(
                 writer_tree,
                 (stored_tape.segments.len() + segment_number) as u64,
-                slot_number,
                 &canonical_segment,
             )
             .is_ok());
 
-            stored_tape.segments.push((canonical_segment.to_vec(), slot_number));
+            stored_tape.segments.push(canonical_segment.to_vec());
         }
 
         // Verify writer state
@@ -371,11 +364,10 @@ fn update_tape(
 
     // Reconstruct leaves for proof
     let mut leaves = Vec::new();
-    for (segment_id, (segment_data, segment_slot)) in stored_tape.segments.iter().enumerate() {
+    for (segment_id, segment_data) in stored_tape.segments.iter().enumerate() {
         let data_array = padded_array::<SEGMENT_SIZE>(segment_data);
         let leaf = compute_leaf(
             segment_id as u64, 
-            *segment_slot as u64,
             &data_array
         );
         leaves.push(leaf);
@@ -391,8 +383,7 @@ fn update_tape(
         .unwrap();
 
     // Prepare data
-    let old_segment_slot = stored_tape.segments[target_segment as usize].1;
-    let old_data_array: [u8; SEGMENT_SIZE] = stored_tape.segments[target_segment as usize].0
+    let old_data_array: [u8; SEGMENT_SIZE] = stored_tape.segments[target_segment as usize]
         .clone()
         .try_into()
         .unwrap();
@@ -406,7 +397,6 @@ fn update_tape(
         tape_address,
         writer_address,
         target_segment,
-        old_segment_slot,
         old_data_array,
         new_data_array,
         merkle_proof,
@@ -415,19 +405,11 @@ fn update_tape(
     let res = send_tx(svm, tx);
     assert!(res.is_ok());
 
-    // Get the new slot after update
-    let account = svm.get_account(&tape_address).unwrap();
-    let tape = Tape::unpack(&account.data).unwrap();
-
-    let old_segment_slot = stored_tape.segments[target_segment as usize].1;
-    let new_segment_slot = tape.tail_slot;
 
     // Update local tree
     assert!(update_segment(
         writer_tree,
         target_segment,
-        old_segment_slot,
-        new_segment_slot,
         &old_data_array,
         &new_data_array,
         &merkle_proof,
@@ -435,8 +417,7 @@ fn update_tape(
     .is_ok());
 
     // Update stored tape segments
-    stored_tape.segments[target_segment as usize].0 = new_data_array.to_vec();
-    stored_tape.segments[target_segment as usize].1 = new_segment_slot;
+    stored_tape.segments[target_segment as usize] = new_data_array.to_vec();
 
     // Verify writer state
     let account = svm.get_account(&writer_address).unwrap();
@@ -476,8 +457,7 @@ fn finalize_tape(
     // Verify update fails after finalization
     let target_segment: u64 = 0;
 
-    let old_segment_slot = stored_tape.segments[target_segment as usize].1;
-    let old_data_array: [u8; SEGMENT_SIZE] = stored_tape.segments[target_segment as usize].0
+    let old_data_array: [u8; SEGMENT_SIZE] = stored_tape.segments[target_segment as usize]
         .clone()
         .try_into()
         .unwrap();
@@ -492,7 +472,6 @@ fn finalize_tape(
         tape_address,
         writer_address,
         target_segment,
-        old_segment_slot,
         old_data_array,
         new_data_array,
         merkle_proof,
@@ -546,7 +525,7 @@ fn compute_challenge_solution(
     miner: &Miner,
     epoch: &Epoch,
     block: &Block,
-) -> (Solution, [u8; SEGMENT_SIZE], u64, [[u8; 32]; PROOF_LEN]) {
+) -> (Solution, [u8; SEGMENT_SIZE], [[u8; 32]; PROOF_LEN]) {
     let miner_challenge = compute_challenge(
         &block.challenge,
         &miner.challenge,
@@ -559,18 +538,15 @@ fn compute_challenge_solution(
 
     let mut leaves = Vec::new();
     let mut recall_segment = [0; SEGMENT_SIZE];
-    let mut recall_slot = 0;
 
-    for (segment_id, (segment_data, segment_slot)) in stored_tape.segments.iter().enumerate() {
+    for (segment_id, segment_data) in stored_tape.segments.iter().enumerate() {
         if segment_id == segment_number {
             recall_segment.copy_from_slice(segment_data);
-            recall_slot = *segment_slot;
         }
 
         let data = padded_array::<SEGMENT_SIZE>(segment_data);
         let leaf = compute_leaf(
             segment_id as u64,
-            *segment_slot as u64,
             &data,
         );
 
@@ -593,7 +569,7 @@ fn compute_challenge_solution(
         .try_into()
         .unwrap();
 
-    (solution, recall_segment, recall_slot, merkle_proof)
+    (solution, recall_segment, merkle_proof)
 }
 
 fn perform_mining(
@@ -602,7 +578,6 @@ fn perform_mining(
     miner_address: Pubkey,
     tape_address: Pubkey,
     solution: Solution,
-    recall_slot: u64,
     recall_segment: [u8; SEGMENT_SIZE],
     merkle_proof: [[u8; 32]; PROOF_LEN],
 ) {
@@ -614,7 +589,6 @@ fn perform_mining(
         miner_address,
         tape_address,
         solution,
-        recall_slot,
         recall_segment,
         merkle_proof,
     );

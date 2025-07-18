@@ -97,7 +97,6 @@ pub fn process_mine(accounts: &[AccountInfo], data: &[u8]) -> ProgramResult {
     let merkle_proof = &args.recall_proof;
     let leaf = Leaf::new(&[
         (segment_number as u64).to_le_bytes().as_ref(),
-        //args.recall_slot.as_ref(),
         args.recall_segment.as_ref(),
     ]);
 

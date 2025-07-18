@@ -25,7 +25,7 @@ pub struct WriteEvent {
 #[derive(Clone, Copy, Debug, PartialEq, Pod, Zeroable)]
 pub struct UpdateEvent {
     pub segment_number: u64,
-    pub old_slot: u64,
+    pub prev_slot: u64,
     pub address: [u8; 32],
 }
 

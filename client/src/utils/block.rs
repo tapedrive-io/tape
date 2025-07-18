@@ -235,7 +235,7 @@ fn merge_update(
     let key = SegmentKey {
         address: *address,
         segment_number,
-        prev_slot: update_event.old_slot,
+        prev_slot: update_event.prev_slot,
     };
 
     // Record the “new_data”, effectively overwriting that segment

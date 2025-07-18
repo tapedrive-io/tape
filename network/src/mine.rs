@@ -104,7 +104,6 @@ async fn try_mine_iteration(
             compute_challenge_solution(
                 &tape,
                 &miner_challenge,
-                segment_slot,
                 segment_number,
                 segments,
                 epoch.target_difficulty,
@@ -116,7 +115,6 @@ async fn try_mine_iteration(
             *miner_address, 
             tape_address, 
             solution, 
-            segment_slot,
             recall_segment, 
             merkle_proof,
         ).await?;
@@ -135,7 +133,6 @@ async fn try_mine_iteration(
 fn compute_challenge_solution(
     tape: &Tape,
     miner_challenge: &[u8; 32],
-    segment_slot: u64,
     segment_number: u64,
     segments: Vec<(u64, Vec<u8>)>,
     epoch_difficulty: u64,
@@ -156,7 +153,6 @@ fn compute_challenge_solution(
         let data = padded_array::<SEGMENT_SIZE>(segment_data);
         let leaf = compute_leaf(
             *segment_id,
-            segment_slot,
             &data,
         );
 
