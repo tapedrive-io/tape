@@ -140,6 +140,9 @@ pub enum SnapshotCommands {
 
         #[arg(short = 'o', long = "output", help = "Output file")]
         output: Option<String>,
+
+        #[arg(short = 'r', long = "raw", help = "Output raw segments instead of decoded tape")]
+        raw: bool,
     },
 
     GetSegment {

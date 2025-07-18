@@ -2,7 +2,7 @@ use anyhow::{bail, Result};
 use chrono::Utc;
 use dialoguer::{theme::ColorfulTheme, Confirm};
 use indicatif::{ProgressBar, ProgressStyle};
-use mime::Mime;
+use mime_guess::Mime;
 use mime_guess::MimeGuess;
 use reqwest;
 use solana_client::nonblocking::rpc_client::RpcClient;
@@ -18,11 +18,12 @@ use tokio::{task, time::Duration};
 use tape_api::prelude::*;
 use tape_client::{
     create_tape, encode_tape, finalize_tape, write_to_tape, CompressionAlgo, EncryptionAlgo,
-    MimeType, TapeFlags, TapeHeader,
+    TapeFlags, TapeHeader,
 };
 
 use crate::cli::{Cli, Commands};
 use crate::log;
+use crate::utils::{mime_to_type, default_octet};
 
 const SEGMENTS_PER_TX: usize = 7; // 7 x 128 = 896 bytes
 const SAFE_SIZE: usize = SEGMENT_SIZE * SEGMENTS_PER_TX;
@@ -267,70 +268,3 @@ fn read_from_stdin() -> std::io::Result<Vec<u8>> {
     Ok(buffer)
 }
 
-/// Returns default octet-stream MIME type.
-fn default_octet() -> Mime {
-    "application/octet-stream".parse().unwrap()
-}
-
-fn mime_to_type(mime: &Mime) -> MimeType {
-    let t = mime.type_().as_str().to_ascii_lowercase();
-    let s = mime.subtype().as_str().to_ascii_lowercase();
-
-    match (t.as_str(), s.as_str()) {
-        // Image formats
-        ("image", "png") => MimeType::ImagePng,
-        ("image", "jpeg") | ("image", "jpg") => MimeType::ImageJpeg,
-        ("image", "gif") => MimeType::ImageGif,
-        ("image", "webp") => MimeType::ImageWebp,
-        ("image", "bmp") => MimeType::ImageBmp,
-        ("image", "tiff") | ("image", "tif") => MimeType::ImageTiff,
-
-        // Document formats
-        ("application", "pdf") => MimeType::ApplicationPdf,
-        ("application", "msword") => MimeType::ApplicationMsword,
-        ("application", "vnd.openxmlformats-officedocument.wordprocessingml.document") => {
-            MimeType::ApplicationDocx
-        }
-        ("application", "vnd.oasis.opendocument.text") => MimeType::ApplicationOdt,
-
-        // Text formats
-        ("text", "plain") => MimeType::TextPlain,
-        ("text", "html") => MimeType::TextHtml,
-        ("text", "css") => MimeType::TextCss,
-        ("text", "javascript") | ("application", "javascript") => MimeType::TextJavascript,
-        ("text", "csv") => MimeType::TextCsv,
-        ("text", "markdown") | ("text", "md") => MimeType::TextMarkdown,
-
-        // Audio formats
-        ("audio", "mpeg") | ("audio", "mp3") => MimeType::AudioMpeg,
-        ("audio", "wav") => MimeType::AudioWav,
-        ("audio", "ogg") => MimeType::AudioOgg,
-        ("audio", "flac") => MimeType::AudioFlac,
-
-        // Video formats
-        ("video", "mp4") => MimeType::VideoMp4,
-        ("video", "webm") => MimeType::VideoWebm,
-        ("video", "mpeg") => MimeType::VideoMpeg,
-        ("video", "x-msvideo") | ("video", "avi") => MimeType::VideoAvi,
-
-        // Application formats
-        ("application", "json") => MimeType::ApplicationJson,
-        ("application", "xml") | ("text", "xml") => MimeType::ApplicationXml,
-        ("application", "zip") => MimeType::ApplicationZip,
-        ("application", "gzip") | ("application", "x-gzip") => MimeType::ApplicationGzip,
-        ("application", "x-tar") | ("application", "tar") => MimeType::ApplicationTar,
-
-        // Font formats
-        ("font", "woff") => MimeType::FontWoff,
-        ("font", "woff2") => MimeType::FontWoff2,
-        ("font", "ttf") | ("application", "font-sfnt") => MimeType::FontTtf,
-        ("font", "otf") => MimeType::FontOtf,
-
-        // Miscellaneous
-        ("application", "rtf") => MimeType::ApplicationRtf,
-        ("application", "sql") => MimeType::ApplicationSql,
-        ("application", "x-yaml") | ("text", "yaml") => MimeType::ApplicationYaml,
-
-        _ => MimeType::Unknown,
-    }
-}

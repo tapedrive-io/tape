@@ -3,12 +3,17 @@ use indicatif::{ProgressBar, ProgressStyle};
 use num_enum::TryFromPrimitive;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::pubkey::Pubkey;
-use std::{ fs, io::{self, Write}, path::Path, str::FromStr };
+use std::str::FromStr;
 use tokio::{task, time::Duration};
 
 use crate::cli::{Cli, Commands};
 use crate::log;
-use tape_client::{ MimeType, decode_tape, get_tape_account, init_read, process_next_block, finalize_read, TapeHeader};
+use crate::utils::write_output;
+
+use tape_client::{
+    decode_tape, finalize_read, get_tape_account, init_read, process_next_block, MimeType,
+    TapeHeader,
+};
 
 pub async fn handle_read_command(cli: Cli, client: RpcClient) -> Result<()> {
     if let Commands::Read { tape, output } = cli.command {
@@ -47,6 +52,7 @@ pub async fn handle_read_command(cli: Cli, client: RpcClient) -> Result<()> {
 
         pb.finish();
         write_output(output, &result, mime_type_enum)?;
+
         log::print_divider();
     }
     Ok(())
@@ -68,84 +74,4 @@ fn setup_progress_bar() -> ProgressBar {
         }
     });
     pb
-}
-
-fn write_output(output: Option<String>, data: &[u8], mime_type: MimeType) -> Result<()> {
-    match output {
-        Some(mut filename) => {
-            if Path::new(&filename).extension().is_none() {
-                if let Some(ext) = get_extension(mime_type) {
-                    filename.push('.');
-                    filename.push_str(ext);
-                }
-            }
-            fs::write(&filename, data)?;
-
-            log::print_divider();
-            log::print_message(&format!("Wrote output to: {}", filename));
-        }
-        None => {
-            io::stdout().write_all(data)?;
-            io::stdout().flush()?;
-        }
-    }
-    Ok(())
-}
-
-fn get_extension(mime_type: MimeType) -> Option<&'static str> {
-    match mime_type {
-        // Image formats
-        MimeType::ImagePng => Some("png"),
-        MimeType::ImageJpeg => Some("jpg"),
-        MimeType::ImageGif => Some("gif"),
-        MimeType::ImageWebp => Some("webp"),
-        MimeType::ImageBmp => Some("bmp"),
-        MimeType::ImageTiff => Some("tiff"),
-
-        // Document formats
-        MimeType::ApplicationPdf => Some("pdf"),
-        MimeType::ApplicationMsword => Some("doc"),
-        MimeType::ApplicationDocx => Some("docx"),
-        MimeType::ApplicationOdt => Some("odt"),
-
-        // Text formats
-        MimeType::TextPlain => Some("txt"),
-        MimeType::TextHtml => Some("html"),
-        MimeType::TextCss => Some("css"),
-        MimeType::TextJavascript => Some("js"),
-        MimeType::TextCsv => Some("csv"),
-        MimeType::TextMarkdown => Some("md"),
-
-        // Audio formats
-        MimeType::AudioMpeg => Some("mp3"),
-        MimeType::AudioWav => Some("wav"),
-        MimeType::AudioOgg => Some("ogg"),
-        MimeType::AudioFlac => Some("flac"),
-
-        // Video formats
-        MimeType::VideoMp4 => Some("mp4"),
-        MimeType::VideoWebm => Some("webm"),
-        MimeType::VideoMpeg => Some("mpeg"),
-        MimeType::VideoAvi => Some("avi"),
-
-        // Application formats
-        MimeType::ApplicationJson => Some("json"),
-        MimeType::ApplicationXml => Some("xml"),
-        MimeType::ApplicationZip => Some("zip"),
-        MimeType::ApplicationGzip => Some("gz"),
-        MimeType::ApplicationTar => Some("tar"),
-
-        // Font formats
-        MimeType::FontWoff => Some("woff"),
-        MimeType::FontWoff2 => Some("woff2"),
-        MimeType::FontTtf => Some("ttf"),
-        MimeType::FontOtf => Some("otf"),
-
-        // Miscellaneous
-        MimeType::ApplicationRtf => Some("rtf"),
-        MimeType::ApplicationSql => Some("sql"),
-        MimeType::ApplicationYaml => Some("yaml"),
-
-        MimeType::Unknown => Some("bin"),
-    }
 }

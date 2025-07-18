@@ -284,6 +284,7 @@ impl TapeStore {
                     .map_err(|_| StoreError::InvalidSegmentKey)?,
             );
 
+            // TODO: this requires that the iterator returns keys in order. Potentially dangerous.
             segments.push((segment_number, value.to_vec()));
         }
 

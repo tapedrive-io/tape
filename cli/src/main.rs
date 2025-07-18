@@ -2,6 +2,7 @@ mod cli;
 mod keypair;
 mod log;
 mod commands;
+mod utils;
 
 use anyhow::Result;
 use clap::Parser;
