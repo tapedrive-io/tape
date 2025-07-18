@@ -205,11 +205,6 @@ fn merge_write(
 
     for (i, segment) in segments.into_iter().enumerate() {
         let segment_number = base + i as u64;
-        // check the le u64 bytes of every segment against the segment number
-        // let encoded_number = u64::from_le_bytes(segment[0..8].try_into().unwrap());
-        // if encoded_number != segment_number {
-        //     return Err(BlockError::InvalidData("Segment number mismatch in write event"));
-        // }
 
         let key = SegmentKey {
             address: *address,

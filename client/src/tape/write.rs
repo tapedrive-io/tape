@@ -25,6 +25,9 @@ pub async fn write_to_tape(
         data,
     );
 
-    Ok(send_with_retry(client, &instruction, signer, MAX_RETRIES).await?)
+    let sig = send_with_retry(client, &instruction, signer, MAX_RETRIES).await?;
+    println!("DEBUG: {}", sig);
+
+    Ok(sig)
 }
 

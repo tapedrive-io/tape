@@ -132,7 +132,23 @@ pub enum SnapshotCommands {
     Load {
         #[arg(help = "Path to the snapshot file to load")]
         input: String,
-    }
+    },
+
+    GetTape {
+        #[arg(help = "Tape account public key")]
+        tape: String,
+
+        #[arg(short = 'o', long = "output", help = "Output file")]
+        output: Option<String>,
+    },
+
+    GetSegment {
+        #[arg(help = "Tape account public key")]
+        tape: String,
+
+        #[arg(help = "Segment index (0 to tape size - 1)")]
+        index: u32,
+    },
 }
 
 #[derive(Subcommand)]
