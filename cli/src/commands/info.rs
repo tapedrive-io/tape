@@ -1,13 +1,15 @@
 use anyhow::Result;
 use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_sdk::pubkey::Pubkey;
+use solana_sdk::{pubkey::Pubkey, signature::Keypair};
 use crate::cli::{Cli, Commands, InfoCommands};
 use crate::log;
 use tape_client as tapedrive;
 use tape_api::utils::from_name;
 use tape_client::TapeHeader;
 
-pub async fn handle_info_commands(cli: Cli, client: RpcClient) -> Result<()> {
+use super::network::resolve_miner;
+
+pub async fn handle_info_commands(cli: Cli, client: RpcClient, payer: Keypair) -> Result<()> {
     match cli.command {
         Commands::Info(info) => {
             match info {
@@ -73,8 +75,9 @@ pub async fn handle_info_commands(cli: Cli, client: RpcClient) -> Result<()> {
                     log::print_message(&format!("{:?}", header));
                     log::print_divider();
                 }
-                InfoCommands::Miner { pubkey } => {
-                    let miner_address: Pubkey = pubkey.parse()?;
+
+                InfoCommands::Miner { pubkey, name } => {
+                    let miner_address = resolve_miner(&client, &payer, pubkey, name, false).await?;
                     let (miner, _) = tapedrive::get_miner_account(&client, &miner_address).await?;
                     log::print_section_header("Miner Account");
                     log::print_message(&format!("Name: {}", from_name(&miner.name)));

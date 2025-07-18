@@ -139,6 +139,10 @@ pub fn process_mine(accounts: &[AccountInfo], data: &[u8]) -> ProgramResult {
     miner.last_proof_block     = block.number;
     miner.challenge            = next_miner_challenge;
 
+    // Update block
+    block.progress = block.progress
+        .saturating_add(1);
+
     // Check if we need to advance the block
     if block.progress >= epoch.target_participation {
         advance_block(block, current_time)?;

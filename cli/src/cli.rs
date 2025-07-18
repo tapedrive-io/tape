@@ -63,10 +63,12 @@ pub enum Commands {
 
     // Miner Commands
 
+    #[command(hide = true)]
     Register {
         #[arg(help = "The name of the miner you're registering")]
         name: String,
     },
+
     Claim {
         #[arg(help = "Miner account public key")]
         miner: String,
@@ -104,7 +106,7 @@ pub enum Commands {
     // Store Management Commands
 
     #[command(subcommand)]
-    Store(StoreCommands),
+    Snapshot(SnapshotCommands),
 
     // Info Commands
 
@@ -114,7 +116,7 @@ pub enum Commands {
 }
 
 #[derive(Subcommand)]
-pub enum StoreCommands {
+pub enum SnapshotCommands {
     Stats {},
 
     Resync {
@@ -122,12 +124,12 @@ pub enum StoreCommands {
         tape: String,
     },
 
-    CreateSnapshot {
+    Create {
         #[arg(help = "Output path for the snapshot file (defaults to a timestamped file in current directory)")]
         output: Option<String>,
     },
 
-    LoadSnapshot {
+    Load {
         #[arg(help = "Path to the snapshot file to load")]
         input: String,
     }
@@ -144,8 +146,11 @@ pub enum InfoCommands {
         number: u64,
     },
     Miner {
-        #[arg(help = "Miner account public key")]
-        pubkey: String,
+        #[arg(help = "Miner account public key", conflicts_with = "name")]
+        pubkey: Option<String>,
+
+        #[arg(help = "Name of the miner you're mining with", conflicts_with = "pubkey", short = 'n', long = "name")]
+        name: Option<String>,
     },
 
     Archive {},

@@ -79,6 +79,18 @@ impl TapeStore {
         Ok(Self { db })
     }
 
+    pub fn new_read_only<P: AsRef<Path>>(path: P) -> Result<Self, StoreError> {
+        let path = path.as_ref();
+
+        let cfs = create_cf_descriptors();
+
+        let db_opts = Options::default();
+
+        let db = DB::open_cf_descriptors_read_only(&db_opts, path, cfs, false)?;
+
+        Ok(Self { db })
+    }
+
     pub fn new_secondary<P: AsRef<Path>>(
         primary_path: P,
         secondary_path: P,
@@ -504,6 +516,12 @@ pub fn secondary() -> Result<TapeStore, StoreError> {
     let db_secondary = current_dir.join("db_tapestore_read");
     std::fs::create_dir_all(&db_secondary).map_err(|e| StoreError::IoError(e))?;
     TapeStore::new_secondary(&db_primary, &db_secondary)
+}
+
+pub fn read_only() -> Result<TapeStore, StoreError> {
+    let current_dir = env::current_dir().map_err(|e| StoreError::IoError(e))?;
+    let db_primary = current_dir.join("db_tapestore");
+    TapeStore::new_read_only(&db_primary)
 }
 
 #[cfg(test)]

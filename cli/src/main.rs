@@ -10,7 +10,7 @@ use solana_sdk::commitment_config::CommitmentConfig;
 
 use cli::{Cli, Commands};
 use keypair::{ get_payer, get_keypair_path };
-use commands::{admin, read, write, info, store, network, claim};
+use commands::{admin, read, write, info, snapshot, network, claim};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -74,12 +74,13 @@ async fn main() -> Result<()> {
 
         // Info Commands
         Commands::Info(_) => {
-            info::handle_info_commands(cli, rpc_client).await?;
+            let payer = get_payer(keypair_path)?;
+            info::handle_info_commands(cli, rpc_client, payer).await?;
         }
 
         // Store Commands
-        Commands::Store(_) => {
-            store::handle_store_commands(cli, rpc_client).await?;
+        Commands::Snapshot(_) => {
+            snapshot::handle_snapshot_commands(cli, rpc_client).await?;
         }
     }
 
