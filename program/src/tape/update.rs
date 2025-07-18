@@ -52,13 +52,13 @@ pub fn process_update(accounts: &[AccountInfo<'_>], data: &[u8]) -> ProgramResul
 
     let old_leaf = Leaf::new(&[
         segment_number.as_ref(), // u64_le_bytes
-        segment_slot.as_ref(),   // u64_le_bytes
+        //segment_slot.as_ref(),   // u64_le_bytes
         args.old_data.as_ref(),
     ]);
 
     let new_leaf = Leaf::new(&[
         segment_number.as_ref(), // u64_le_bytes
-        current_slot.to_le_bytes().as_ref(), // u64_le_bytes
+        //current_slot.to_le_bytes().as_ref(), // u64_le_bytes
         args.new_data.as_ref(),
     ]);
 

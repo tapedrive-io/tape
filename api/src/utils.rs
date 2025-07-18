@@ -55,7 +55,7 @@ pub fn compute_leaf(
 
     Leaf::new(&[
         segment_id.as_ref(), // u64 (8 bytes)
-        segment_slot.as_ref(), // u64 (8 bytes)
+        //segment_slot.as_ref(), // u64 (8 bytes)
         segment,
     ])
 }
