@@ -12,9 +12,16 @@ use solana_sdk::commitment_config::CommitmentConfig;
 use cli::{Cli, Commands};
 use keypair::{ get_payer, get_keypair_path };
 use commands::{admin, read, write, info, snapshot, network, claim};
+use env_logger::{self, Env};
 
 #[tokio::main]
 async fn main() -> Result<()> {
+
+    // setup env_logger
+    env_logger::Builder::from_env(Env::default()
+        .default_filter_or(format!("tape_network=trace,tape_client=trace"))).init();
+    
+   
     log::print_title(format!("⊙⊙ TAPEDRIVE {}", env!("CARGO_PKG_VERSION")).as_str());
 
     let cli = Cli::parse();

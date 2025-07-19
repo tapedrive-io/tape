@@ -1,4 +1,5 @@
 use anyhow::{Result, anyhow};
+use log::{debug, error};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::{signature::Keypair, pubkey::Pubkey};
 use tape_client::mine::mine::perform_mining;
@@ -32,14 +33,14 @@ pub async fn mine_loop(
 
     loop {
         match try_mine_iteration(store, client, miner_address, signer).await {
-            Ok(()) => println!("DEBUG: Mining iteration completed successfully"),
+            Ok(()) => debug!("Mining iteration completed successfully"),
             Err(e) => {
                 // Log the error (you can use a proper logger like `log::error!` if set up)
-                eprintln!("ERROR: Mining iteration failed: {:?}", e);
+                error!("Mining iteration failed: {:?}", e);
             }
         }
 
-        println!("DEBUG: Waiting for next interval...");
+        debug!("Waiting for next interval...");
         sleep(interval).await;
     }
 }
@@ -50,7 +51,7 @@ async fn try_mine_iteration(
     miner_address: &Pubkey,
     signer: &Keypair,
 ) -> Result<()> {
-    println!("DEBUG: Starting mine process...");
+    debug!("Starting mine process...");
 
     let epoch = get_epoch_account(client)
         .await
@@ -74,7 +75,7 @@ async fn try_mine_iteration(
         block.challenge_set
     );
 
-    println!("DEBUG: Recall tape number: {:?}", tape_number);
+    debug!("Recall tape number: {:?}", tape_number);
 
     let tape_address = store.get_tape_address(tape_number);
 
@@ -98,7 +99,7 @@ async fn try_mine_iteration(
                 tape_address, tape.total_segments, segments.len()));
         }
 
-        println!("DEBUG: Recall tape {}, segment {}, slot: {:?}", tape_number, segment_number, segment_slot);
+        debug!("Recall tape {}, segment {}, slot: {:?}", tape_number, segment_number, segment_slot);
 
         let (solution, recall_segment, merkle_proof) = 
             compute_challenge_solution(
@@ -119,12 +120,12 @@ async fn try_mine_iteration(
             merkle_proof,
         ).await?;
 
-        println!("DEBUG: Mining successful! Signature: {:?}", sig);
+        debug!("Mining successful! Signature: {:?}", sig);
     } else {
-        println!("DEBUG: Tape not found, continuing...");
+        debug!("Tape not found, continuing...");
     }
 
-    println!("DEBUG: Catching up with primary...");
+    debug!("Catching up with primary...");
     store.catch_up_with_primary()?;
 
     Ok(())
@@ -176,7 +177,7 @@ fn compute_challenge_solution(
     if merkle_tree.get_root() != tape.merkle_root.into() {
         return Err(anyhow!("Merkle root mismatch"));
     } else {
-        println!("DEBUG: Merkle root matches tape root!");
+        debug!("Merkle root matches tape root!");
     }
 
     let solution = solve_challenge(
@@ -185,12 +186,12 @@ fn compute_challenge_solution(
         epoch_difficulty
     )?;
 
-    println!("DEBUG: Solution difficulty: {:?}", solution.difficulty());
+    debug!("Solution difficulty: {:?}", solution.difficulty());
 
     solution.is_valid(&miner_challenge, &recall_segment)
         .map_err(|_| anyhow!("Invalid solution"))?;
 
-    println!("DEBUG: Solution is valid!");
+    debug!("Solution is valid!");
 
     Ok((solution, recall_segment, merkle_proof))
 }
