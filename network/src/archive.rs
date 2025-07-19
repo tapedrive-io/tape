@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Result};
+use log::{debug, error};
 use std::collections::HashSet;
 use solana_transaction_status_client_types::TransactionDetails;
 use solana_client::nonblocking::rpc_client::RpcClient;
@@ -21,9 +22,9 @@ pub async fn archive_loop(
 ) -> Result<()> {
     // If a trusted peer is provided, sync with it first
     if let Some(peer_url) = trusted_peer.clone() {
-        println!("DEBUG: Using trusted peer: {}", peer_url);
-        println!("DEBUG: Syncing with trusted peer");
-        println!("DEBUG: This may take a while... please be patient");
+        debug!("Using trusted peer: {}", peer_url);
+        debug!("Syncing with trusted peer");
+        debug!("This may take a while... please be patient");
         sync_with_trusted_peer(store, client, &peer_url).await?;
     }
 
@@ -36,7 +37,7 @@ pub async fn archive_loop(
         }
     };
 
-    println!("DEBUG: Initial slot tip: {}", latest_slot);
+    debug!("Initial slot tip: {}", latest_slot);
 
     // Resume from store or start at current tip
     let mut last_processed_slot = starting_slot
@@ -53,8 +54,8 @@ pub async fn archive_loop(
             &mut last_processed_slot,
             &mut iteration_count,
         ).await {
-            Ok(()) => println!("DEBUG: Block processing iteration completed successfully"),
-            Err(e) => eprintln!("ERROR: Block processing iteration failed: {:?}", e),
+            Ok(()) => debug!("Block processing iteration completed successfully"),
+            Err(e) => error!("Block processing iteration failed: {:?}", e),
         }
 
         print_drift_status(store, latest_slot, last_processed_slot);
@@ -281,8 +282,8 @@ fn print_drift_status(
         "Falling behind"
     };
 
-    println!(
-        "DEBUG: Drift {} slots behind tip ({}), status: {}",
+    debug!(
+        "Drift {} slots behind tip ({}), status: {}",
         drift, latest_slot, health_status
     );
 }

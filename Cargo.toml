@@ -65,6 +65,8 @@ indicatif = "0.17"
 console = "0.15"
 mime = "0.3"
 mime_guess = "2.0"
+log = "0.4"
+env_logger = "0.11"
 
 # network-specific
 futures = "0.3"

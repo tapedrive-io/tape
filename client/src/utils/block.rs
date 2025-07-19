@@ -125,8 +125,6 @@ fn verify_counts(tape_block: &TapeBlock) -> Result<(), BlockError> {
         }
     }
 
-    // println!("[Counts] Write: {}, Update: {}, Finalize: {}", write_events, update_events, finalize_events);
-
     if tape_block.events.len() != tape_block.instructions.len() {
         return Err(BlockError::CountMismatch(
             "Events and Instructions",
